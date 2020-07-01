@@ -1,0 +1,6 @@
+[package]
+name = "rust_raytrace"
+version = "0.1.0"
+authors = ["Calvin Godfrey <calvinbbcard@gmail.com>"]
+
+[dependencies]
