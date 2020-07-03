@@ -11,6 +11,27 @@ static INFINITY: f64 = 1e308;
 static PI: f64 = 3.14159265358979;
 static SMALL: f64 = 0.001;
 
+trait Material {
+    fn scatter(&self, ray: &Ray, hit_record: &HitRecord) -> (Option<Ray>, Option<Vector3<f64>>);
+}
+
+struct Lambertian {
+    albedo: Vector3<f64>,
+}
+
+impl Material for Lambertian {
+    fn scatter(&self, ray: &Ray, hit_record: &HitRecord) -> (Option<Ray>, Option<Vector3<f64>>) {
+        let dir: Vector3<f64> = hit_record.n.as_ref() + rand_in_hemisphere(hit_record.n.as_ref());
+        let ray = Ray::new(hit_record.p, dir);
+        let color = self.albedo;
+        (Some(ray), Some(color))
+    }
+}
+
+impl Lambertian {
+    fn new(albedo: Vector3<f64>) -> Self { Self { albedo } }
+}
+
 struct Camera {
     origin: Point3<f64>,
     upper_left_corner: Point3<f64>,
@@ -43,15 +64,17 @@ trait Hittable {
     fn intersects(&self, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord>;
 }
 
-struct HitRecord {
+#[derive(Copy, Clone)]
+struct HitRecord<'a> {
     t: f64, // time of hit along ray
     n: Unit<Vector3<f64>>, // normal of surface at point
     p: Point3<f64>, // point of intersection
     front: bool, // if the normal points outwards or not
+    mat: &'a Box<dyn Material>, // how the surface acts
 }
 
-impl HitRecord {
-    fn new(t: f64, n: Unit<Vector3<f64>>, p: Point3<f64>, front: bool) -> Self { Self { t, n, p, front } }
+impl <'a> HitRecord<'a> {
+    fn new(t: f64, n: Unit<Vector3<f64>>, p: Point3<f64>, front: bool, mat: &'a Box<dyn Material>) -> Self { Self { t, n, p, front, mat } }
     fn set_front(&mut self, ray: &Ray) {
         self.front = ray.dir.dot(self.n.as_ref()) < 0.0;
         self.n = if self.front { self.n } else { -self.n }
@@ -74,10 +97,11 @@ impl Ray {
 struct Sphere {
     center: Point3<f64>,
     r: f64,
+    mat: Box<dyn Material>,
 }
 
 impl Sphere {
-    fn new(center: Point3<f64>, r: f64) -> Self { Self { center, r } }
+    fn new(center: Point3<f64>, r: f64, mat: Box<dyn Material>) -> Self { Self { center, r, mat } }
 }
 
 impl Hittable for Sphere {
@@ -97,14 +121,14 @@ impl Hittable for Sphere {
         let ans = (-b - root) * inv_a; // try first solution to equation
         if ans < tmax && ans > tmin {
             let hit = ray.at(ans);
-            let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - self.center), hit, true);
+            let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - self.center), hit, true, &self.mat);
             hit_record.set_front(ray);
             return Some(hit_record);
         }
         let ans = (-b + root) * inv_a;
         if ans < tmax && ans > tmin {
             let hit = ray.at(ans);
-            let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - self.center), hit, true);
+            let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - self.center), hit, true, &self.mat);
             hit_record.set_front(ray);
             return Some(hit_record);
         } else {
@@ -119,13 +143,14 @@ fn main() {
     let aspect_ratio = 16.0 / 9.0;
     let image_height: u32 = ((image_width as f64) / aspect_ratio).round() as u32;
     let camera: Camera = Camera::new(aspect_ratio);
-    let samples_per_pixel = 500;
-    let max_depth: u32 = 50;
+    let samples_per_pixel = 50;
+    let max_depth: u32 = 5;
     let mut img = RgbImage::new(image_width, image_height);
+    let path = "test2.png";
 
     let mut vec: Vec<Box<dyn Hittable>> = Vec::new();
-    vec.push(Box::new(Sphere::new(Point3::new(0.0, 0.0, -1.0), 0.5)));
-    vec.push(Box::new(Sphere::new(Point3::new(0.0, -100.5, -1.0), 100.)));
+    vec.push(Box::new(Sphere::new(Point3::new(0.0, 0.0, -1.0), 0.5, Box::new(Lambertian::new(Vector3::new(255.0, 90.0, 90.0))))));
+    vec.push(Box::new(Sphere::new(Point3::new(0.0, -100.5, -1.0), 100., Box::new(Lambertian::new(Vector3::new(90.0, 90.0, 255.0))))));
     let light: Point3<f64> = Point3::new(0.0, 0.0, 0.0);
 
     for i in 0u32..image_width {
@@ -141,9 +166,12 @@ fn main() {
             }
             draw_color(&mut img, i, j, &color, samples_per_pixel);
         }
+        if i % 100 == 0 {
+            img.save(path).unwrap();
+        }
     }
 
-    img.save("test2.png").unwrap();
+    img.save(path).unwrap();
 
 }
 
@@ -151,30 +179,46 @@ fn cast_ray(ray: &Ray, vec: &Vec<Box<dyn Hittable>>, light: &Point3<f64>, depth:
     if depth <= 0 {
         return Vector3::new(0.0, 0.0, 0.0);
     }
-    let mut hit_record: HitRecord = HitRecord::new(INFINITY, Unit::new_normalize(Vector3::new(1.0, 0.0, 0.0)), Point3::origin(), true);
+    let mut hit_record: Option<HitRecord> = None;
     for sphere in vec.iter() {
         let attempt: Option<HitRecord> = sphere.intersects(ray, SMALL, INFINITY);
         match attempt {
             Some(x) => {
-                if x.t < hit_record.t {
-                    hit_record = x;
+                match hit_record {
+                    Some(y) => {
+                        if x.t < y.t {
+                            hit_record = Some(x);
+                        }
+                    }
+                    None => { hit_record = Some(x) }
                 }
             }
             None => {}
         }
     }
-    if hit_record.t == INFINITY { // miss
-        let white = Rgb([255u8, 255u8, 255u8]);
-        let blue = Rgb([50u8, 129u8, 255u8]);
-        let unit: Unit<Vector3<f64>> = Unit::new_normalize(ray.dir);
-        let color = gradient(&white, &blue, 0.5 * (1.0 + unit.as_ref().y));
-        return Vector3::new(color[0] as f64, color[1] as f64, color[2] as f64);
-    } else {
-        let new_target: Point3<f64> = hit_record.p + hit_record.n.as_ref() + rand_in_unit_sphere();
-        let new_ray = Ray::new(hit_record.p, new_target - hit_record.p);
-        cast_ray(&new_ray, vec, light, depth - 1).scale(0.5)
-    }
-    
+    match hit_record {
+        Some(record) => {
+            let pair = record.mat.scatter(ray, &record);
+            match pair.0 {
+                Some(x) => {
+                    match pair.1 {
+                        Some(y) => {
+                            return multiply_vector3(y, cast_ray(&x, vec, light, depth - 1));
+                        }
+                        None => {return Vector3::new(0.0, 0.0, 0.0)} // should never happen
+                    }
+                }
+                None => {return Vector3::new(0.0, 0.0, 0.0)}
+            }
+        }
+        None => {
+            let white = Rgb([255u8, 255u8, 255u8]);
+            let blue = Rgb([50u8, 129u8, 255u8]);
+            let unit: Unit<Vector3<f64>> = Unit::new_normalize(ray.dir);
+            let color = gradient(&white, &blue, 0.5 * (1.0 + unit.as_ref().y));
+            return Vector3::new(color[0] as f64, color[1] as f64, color[2] as f64);
+        }
+    }    
 }
 
 fn gradient(from: &Rgb<u8>, to: &Rgb<u8>, scale: f64) -> Rgb<u8> {
@@ -220,4 +264,18 @@ fn rand_in_unit_sphere() -> Vector3<f64> {
     let z = rand_range(-1., 1.);
     let r = (1. - z * z).sqrt();
     return Vector3::new(r * a.cos(), r * a.sin(), z);
+}
+
+fn rand_in_hemisphere(normal: &Vector3<f64>) -> Vector3<f64> {
+    let vec: Vector3<f64> = rand_in_unit_sphere();
+    if normal.dot(&vec) > 0. {
+        vec
+    } else {
+        -vec
+    }
+}
+
+fn multiply_vector3(a: Vector3<f64>, b: Vector3<f64>) -> Vector3<f64> {
+    let factor = 1. / 255.;
+    Vector3::new(a.x * b.x * factor, a.y * b.y * factor, a.z * b.z * factor)
 }
