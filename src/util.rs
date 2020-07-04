@@ -13,6 +13,7 @@ pub fn gradient(from: &Rgb<u8>, to: &Rgb<u8>, scale: f64) -> Rgb<u8> {
     Rgb([r, g, b])
 }
 
+#[allow(dead_code)]
 pub fn clamp(x: f64, min: f64, max: f64) -> f64 {
     if x < min {
         return min;
@@ -31,16 +32,7 @@ pub fn rand_range(min: f64, max: f64) -> f64 {
 }
 
 pub fn draw_color(img: &mut RgbImage, i: u32, j: u32, color: &Point3<f64>, samples: u32) {
-    let r = color.x;
-    let g = color.y;
-    let b = color.z;
-    let scale = 1. / (samples as f64 * 255.);
-    let r = r * scale;
-    let g = g * scale;
-    let b = b * scale;
-    let ans = Rgb([(r.sqrt() * 255.).round() as u8,
-                            (g.sqrt() * 255.).round() as u8,
-                            (b.sqrt() * 255.).round() as u8]);
+    let ans = point_to_color(color, 1. / GAMMA, samples);
     img.put_pixel(i, j, ans);
 }
 
@@ -70,13 +62,15 @@ pub fn reflect(v: &Vector3<f64>, n: &Unit<Vector3<f64>>) -> Vector3<f64> {
     v - n.as_ref().scale(scale)
 }
 
-pub fn increment_color(img: &mut RgbImage, i: u32, j: u32, color: &Vector3<f64>, samples: u32) {
-    let inv: f64 = 1. / (samples as f64);
-    let curr = img.get_pixel(i, j);
-    let r = curr[0] as f64 + color.x * inv;
-    let g = curr[1] as f64 + color.y * inv;
-    let b = curr[2] as f64 + color.z * inv;
-    img.put_pixel(i, j, Rgb([r.round() as u8, g.round() as u8, b.round() as u8]));
+#[allow(dead_code)]
+pub fn increment_color(arr: &mut Vec<Vec<(f64, f64, f64)>>, i: usize, j: usize, color: &Vector3<f64>, samples: u32) {
+    let inv = 1. / (samples as f64);
+    let r = color.x * inv;
+    let g = color.y * inv;
+    let b = color.z * inv;
+    arr[i][j].0 += r;
+    arr[i][j].1 += g;
+    arr[i][j].2 += b;
 }
 
 pub fn refract(vec: &Unit<Vector3<f64>>, n: &Unit<Vector3<f64>>, eta: f64) -> Vector3<f64> {
@@ -84,4 +78,35 @@ pub fn refract(vec: &Unit<Vector3<f64>>, n: &Unit<Vector3<f64>>, eta: f64) -> Ve
     let out_para = (vec.as_ref() + n.as_ref().scale(cost)).scale(eta);
     let out_perp = -n.scale((1. - out_para.dot(&out_para)).sqrt());
     out_para + out_perp
+}
+
+#[allow(dead_code)]
+pub fn draw_picture(image: &mut RgbImage, pixels: &Vec<Vec<(f64, f64, f64)>>, path: &str) {
+    for i in 0..image.height() {
+        let w = i as usize;
+        for j in 0..image.width() {
+            let (r, g, b) = pixels[w][j as usize];
+            let pt = Point3::new(r, g, b);
+            let color = point_to_color(&pt, 1. / GAMMA, 1);
+            image.put_pixel(j, i, color);
+        }
+    }
+    image.save(path).unwrap();
+}
+
+fn point_to_color(vec: &Point3<f64>, gamma: f64, samples: u32) -> Rgb<u8> {
+    let scale: f64 = 1. / (255. * samples as f64);
+    let r: f64 = vec[0] * scale;
+    let g: f64 = vec[1] * scale;
+    let b: f64 = vec[2] * scale;
+    Rgb([(r.powf(gamma) * 255.).round() as u8,
+         (g.powf(gamma) * 255.).round() as u8,
+         (b.powf(gamma) * 255.).round() as u8])
+
+}
+
+pub fn schlick(cosine: f64, index: f64) -> f64 {
+    let r0 = (1. - index) / (1. + index);
+    let r0 = r0 * r0;
+    return r0 + (1. - r0) * (1. - cosine).powf(5.);
 }
