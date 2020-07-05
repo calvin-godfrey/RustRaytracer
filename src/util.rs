@@ -3,6 +3,7 @@ use nalgebra::geometry::Point3;
 use nalgebra::base::{Unit, Vector3};
 use rand::prelude::*;
 use rand::distributions::Standard;
+use std::sync::{Mutex, Arc};
 
 use crate::consts::*;
 
@@ -72,15 +73,19 @@ pub fn reflect(v: &Vector3<f64>, n: &Unit<Vector3<f64>>) -> Vector3<f64> {
     v - n.as_ref().scale(scale)
 }
 
-#[allow(dead_code)]
-pub fn increment_color(arr: &mut Vec<Vec<(f64, f64, f64)>>, i: usize, j: usize, color: &Vector3<f64>, samples: u32) {
-    let inv = 1. / (samples as f64);
-    let r = color.x * inv;
-    let g = color.y * inv;
-    let b = color.z * inv;
-    arr[i][j].0 += r;
-    arr[i][j].1 += g;
-    arr[i][j].2 += b;
+pub fn increment_color(arr: &mut Vec<Vec<(f64, f64, f64, u32)>>, i: usize, j: usize, color: &Vector3<f64>) {
+    arr[i][j].0 += color.x;
+    arr[i][j].1 += color.y;
+    arr[i][j].2 += color.z;
+    arr[i][j].3 += 1;
+}
+
+pub fn thread_safe_increment_color(arr: &Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>>, i: usize, j: usize, color: &Vector3<f64>) {
+    let mut data = arr.lock().unwrap();
+    data[i][j].0 += color.x;
+    data[i][j].1 += color.y;
+    data[i][j].2 += color.z;
+    data[i][j].3 += 1;
 }
 
 pub fn refract(vec: &Unit<Vector3<f64>>, n: &Unit<Vector3<f64>>, eta: f64) -> Vector3<f64> {
@@ -91,12 +96,12 @@ pub fn refract(vec: &Unit<Vector3<f64>>, n: &Unit<Vector3<f64>>, eta: f64) -> Ve
 }
 
 #[allow(dead_code)]
-pub fn draw_picture(image: &mut RgbImage, pixels: &Vec<Vec<(f64, f64, f64)>>, path: &str) {
+pub fn draw_picture(image: &mut RgbImage, pixels: &Vec<Vec<(f64, f64, f64, u32)>>, path: &str) {
     for i in 0..image.height() {
         let w = i as usize;
         for j in 0..image.width() {
-            let (r, g, b) = pixels[w][j as usize];
-            let pt = Point3::new(r, g, b);
+            let (r, g, b, n) = pixels[w][j as usize];
+            let pt = Point3::new(r / n as f64, g / n as f64, b / n as f64);
             let color = point_to_color(&pt, 1. / GAMMA, 1);
             image.put_pixel(j, i, color);
         }
@@ -119,4 +124,20 @@ pub fn schlick(cosine: f64, index: f64) -> f64 {
     let r0 = (1. - index) / (1. + index);
     let r0 = r0 * r0;
     return r0 + (1. - r0) * (1. - cosine).powf(5.);
+}
+
+pub fn thread_safe_draw_picture(img: &Mutex<image::RgbImage>, pixels: &Mutex<Vec<Vec<(f64, f64, f64, u32)>>>, path: &str) {
+    let mut img_guard = img.lock().unwrap();
+    let pixels_guard = pixels.lock().unwrap();
+
+    for i in 0..img_guard.height() {
+        let w = i as usize;
+        for j in 0..img_guard.width() {
+            let (r, g, b, n) = pixels_guard[w][j as usize];
+            let pt = Point3::new(r / n as f64, g / n as f64, b / n as f64);
+            let color = point_to_color(&pt, 1. / GAMMA, 1);
+            img_guard.put_pixel(j, i, color);
+        }
+    }
+    img_guard.save(path).unwrap();
 }

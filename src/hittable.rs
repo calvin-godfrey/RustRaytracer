@@ -20,7 +20,7 @@ impl <'a> HitRecord<'a> {
     }
 }
 
-pub trait Hittable {
+pub trait Hittable: Send + Sync {
     fn intersects(&self, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord>;
 }
 
@@ -35,7 +35,6 @@ impl Sphere {
 }
 
 impl Hittable for Sphere {
-    
     fn intersects(&self, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
         let diff: Vector3<f64> = ray.origin - self.center;
         // get quadratic equation, calculate discriminant
@@ -66,3 +65,7 @@ impl Hittable for Sphere {
         }
     }
 }
+
+// to please compiler
+unsafe impl Send for Sphere {}
+unsafe impl Sync for Sphere {}

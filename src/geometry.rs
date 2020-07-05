@@ -1,6 +1,7 @@
 use nalgebra::base::{Unit, Vector3};
 use nalgebra::geometry::Point3;
 use image::Rgb;
+use std::sync::Arc;
 
 use crate::hittable::{Hittable, HitRecord};
 use crate::consts::*;
@@ -18,7 +19,7 @@ impl Ray {
     }
 }
 
-pub fn cast_ray(ray: &Ray, vec: &Vec<Box<dyn Hittable>>, light: &Point3<f64>, depth: u32) -> Vector3<f64> {
+pub fn cast_ray(ray: &Ray, vec: &Vec<Box<dyn Hittable>>, depth: u32) -> Vector3<f64> {
     if depth <= 0 {
         return Vector3::new(0.0, 0.0, 0.0);
     }
@@ -46,7 +47,7 @@ pub fn cast_ray(ray: &Ray, vec: &Vec<Box<dyn Hittable>>, light: &Point3<f64>, de
                 Some(x) => {
                     match pair.1 {
                         Some(y) => {
-                            return util::multiply_vector3(y, cast_ray(&x, vec, light, depth - 1));
+                            return util::multiply_vector3(y, cast_ray(&x, vec, depth - 1));
                         }
                         None => {return Vector3::new(0.0, 0.0, 0.0)} // should never happen
                     }
