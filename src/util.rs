@@ -52,6 +52,16 @@ pub fn rand_in_hemisphere(normal: &Vector3<f64>) -> Vector3<f64> {
     }
 }
 
+pub fn rand_in_disk() -> Vector3<f64> {
+    loop {
+        let x = rand();
+        let y = rand();
+        if x*x + y*y < 1. {
+            return Vector3::new(x, y, 0.);
+        }
+    }
+}
+
 pub fn multiply_vector3(a: Vector3<f64>, b: Vector3<f64>) -> Vector3<f64> {
     let factor = 1. / 255.;
     Vector3::new(a.x * b.x * factor, a.y * b.y * factor, a.z * b.z * factor)
