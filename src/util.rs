@@ -6,6 +6,7 @@ use rand::distributions::Standard;
 use std::sync::{Mutex, Arc};
 
 use crate::consts::*;
+use crate::geometry;
 
 pub fn gradient(from: &Rgb<u8>, to: &Rgb<u8>, scale: f64) -> Rgb<u8> {
     let r: u8 = ((1.0 - scale) * from[0] as f64 + (scale * (to[0] as f64))) as u8;
@@ -61,11 +62,6 @@ pub fn rand_in_disk() -> Vector3<f64> {
             return Vector3::new(x, y, 0.);
         }
     }
-}
-
-pub fn multiply_vector3(a: Vector3<f64>, b: Vector3<f64>) -> Vector3<f64> {
-    let factor = 1. / 255.;
-    Vector3::new(a.x * b.x * factor, a.y * b.y * factor, a.z * b.z * factor)
 }
 
 pub fn reflect(v: &Vector3<f64>, n: &Unit<Vector3<f64>>) -> Vector3<f64> {
@@ -140,4 +136,12 @@ pub fn thread_safe_draw_picture(img: &Mutex<image::RgbImage>, pixels: &Mutex<Vec
         }
     }
     img_guard.save(path).unwrap();
+}
+
+pub fn get_sky(ray: &geometry::Ray) -> Vector3<f64> {
+    let white = Rgb([255u8, 255u8, 255u8]);
+    let blue = Rgb([50u8, 129u8, 255u8]);
+    let unit: Unit<Vector3<f64>> = Unit::new_normalize(ray.dir);
+    let color = gradient(&white, &blue, 0.5 * (1.0 + unit.as_ref().y));
+    return Vector3::new(color[0] as f64, color[1] as f64, color[2] as f64);
 }

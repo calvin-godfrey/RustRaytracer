@@ -6,15 +6,17 @@ use std::sync::{Arc, Mutex};
 
 mod util;
 mod consts;
+mod material;
+mod hittable;
+mod geometry;
+mod parser;
+
 use consts::*;
 
-mod material;
 use material::materials;
 
-mod hittable;
-use hittable::{Hittable, Sphere};
+use hittable::{Hittable, Sphere, Mesh};
 
-mod geometry;
 use geometry::{Ray};
 
 #[derive(Copy, Clone)]
@@ -66,13 +68,22 @@ impl Camera {
 }
 
 fn main() {
-    let from: Point3<f64> = Point3::new(13., 2.,3.);
-    let to: Point3<f64> = Point3::new(0., 0., 0.0);
-    let up: Vector3<f64> = Vector3::new(0., 1., 0.);
+    // let from: Point3<f64> = Point3::new(13., 2.,3.);
+    // let to: Point3<f64> = Point3::new(0., 0., 0.0);
+    // let up: Vector3<f64> = Vector3::new(0., 1., 0.);
 
-    let camera: Camera = Camera::new(from, to, up, ASPECT_RATIO, 20., 0.16, 10.);
+    let from = Point3::new(-200. * 0.8, -100. * 0.8, 100. * 0.8);
+    let to = Point3::new(0., -1., 10.);
+    let up = Vector3::new(0., 0., 1.);
+
+    let camera: Camera = Camera::new(from, to, up, ASPECT_RATIO, 20., 0.0, 10.);
+
+    let mesh: Mesh = hittable::Mesh::new("data/cat/cat.obj", true);
+
     let mut img = RgbImage::new(IMAGE_WIDTH, IMAGE_HEIGHT);
-    let vec = make_world();
+    // let vec = make_world();
+    let mut vec: Vec<Box<dyn Hittable>> = Vec::new();
+    vec.push(Box::new(mesh));
     if SINGLE_THREAD {
         singlethread(&mut img, PATH, &vec, &camera);
     } else {
@@ -120,10 +131,10 @@ fn singlethread(img: &mut image::RgbImage, path: &str, vec: &Vec<Box<dyn Hittabl
             }
             pixels.push(temp);
         }
-        let total_rays = IMAGE_WIDTH * IMAGE_HEIGHT * SAMPLES_PER_PIXEL;
-        for r in 0..total_rays {
+
+        for r in 0..TOTAL_RAYS {
             if r % 100000 == 0 {
-                println!("Drawing ray {} of {}, {:.2}%", r, total_rays, (r as f64 * 100.) / (total_rays as f64));
+                println!("Drawing ray {} of {}, {:.2}%", r, TOTAL_RAYS, (r as f64 * 100.) / (TOTAL_RAYS as f64));
             }
             if r % 1000000 == 0 {
                 util::draw_picture(img, &pixels, path);
@@ -206,21 +217,4 @@ fn multithread (img: image::RgbImage, vec: Vec<Box<dyn Hittable>>, camera: Camer
     }
 
     image_arc.lock().unwrap().save(PATH).unwrap();
-
-    // for r in 0..total_rays {
-    //     if r % 100000 == 0 {
-    //         println!("Drawing ray {} of {}, {:.2}%", r, total_rays, (r as f64 * 100.) / (total_rays as f64));
-    //     }
-    //     if r % 1000000 == 0 {
-    //         util::draw_picture(img, &pixels, path);
-    //         img.save(path).unwrap();
-    //     }
-    //     let u: f64 = util::rand();
-    //     let v: f64 = util::rand();
-    //     let ray = camera.get_ray(u, v);
-    //     let res = cast_ray(&ray, &vec, MAX_DEPTH);
-    //     let i = (u * IMAGE_WIDTH as f64).floor() as usize;
-    //     let j = (v * IMAGE_HEIGHT as f64).floor() as usize;
-    //     util::increment_color(&mut pixels, j, i, &res);
-    // }
 }
