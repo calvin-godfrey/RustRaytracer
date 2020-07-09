@@ -32,11 +32,9 @@ pub fn cast_ray(ray: &Ray, vec: &Vec<Box<dyn Hittable>>, depth: u32) -> Vector3<
                     let col = cast_ray(&x, vec, depth - 1);
                     return Vector3::new(col.x * y.x * INV_COL_MAX, col.y * y.y * INV_COL_MAX, col.z * y.z * INV_COL_MAX);
                 },
-                None => {return Vector3::new(0.0, 0.0, 0.0)}
+                None => Vector3::new(0.0, 0.0, 0.0)
             }
         }
-        None => {
-            return util::get_sky(ray);
-        }
+        None => util::get_sky(ray)
     }    
 }

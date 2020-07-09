@@ -88,9 +88,6 @@ pub mod materials {
                     let r: f64 = from_image[0] as f64;
                     let g: f64 = from_image[1] as f64;
                     let b: f64 = from_image[2] as f64;
-                    // if r == 0. && g == 0. && b == 0. {
-                    //     println!("Bad?");
-                    // }
                     color = Vector3::new(r, g, b);
                 }, // get color from texture
                 None => color = self.backup,

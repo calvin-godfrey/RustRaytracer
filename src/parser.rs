@@ -34,7 +34,7 @@ pub fn parse_obj(path: &str, use_bb: bool) -> hittable::Mesh {
                     p.push(Point3::new(x, y, z));
                 }
             }
-            let bbox = if use_bb { Some(hittable::BoundingBox::new(min, max)) } else { None };
+            let bbox = Some(hittable::BoundingBox::new(min, max));
             for (ind, pos) in mesh.normals.iter().enumerate() {
                 if ind % 3 == 0 {
                     let x = *pos as f64;
@@ -70,7 +70,6 @@ pub fn parse_obj(path: &str, use_bb: bool) -> hittable::Mesh {
                 let mesh_mat: &tobj::Material = &mats[id];
                 let texture_path = &mesh_mat.ambient_texture[..];
                 let real_mat: materials::Texture = materials::Texture::new(texture_path, Vector3::new(255., 0., 0.));
-                println!("{}, {}", uv.len(), mesh.texcoords.len());
                 return hittable::Mesh { ind, p, n, uv, mat: Box::new(real_mat), bounding_box: bbox, triangle_boxes };
             }
         },

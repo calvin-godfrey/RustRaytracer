@@ -78,7 +78,7 @@ fn main() {
 
     let camera: Camera = Camera::new(from, to, up, ASPECT_RATIO, 20., 0.0, 10.);
 
-    let mesh: Mesh = hittable::Mesh::new("data/cat/cat.obj", true);
+    let mesh: Mesh = hittable::Mesh::new("data/cat/cat.obj", false);
 
     let mut img = RgbImage::new(IMAGE_WIDTH, IMAGE_HEIGHT);
     // let vec = make_world();
@@ -180,6 +180,23 @@ fn multithread (img: image::RgbImage, vec: Vec<Box<dyn Hittable>>, camera: Camer
         }
         pixels.push(temp);
     }
+
+    // first, make a single-threated pass through so that every pixel has data
+    // for i in 0u32..IMAGE_WIDTH {
+    //     if i % 100 == 0 {
+    //         println!("Drawing {} of {}", i, IMAGE_WIDTH);
+    //     }
+    //     for j in 0u32..IMAGE_HEIGHT {
+    //         let u: f64 = (i as f64 + util::rand()) / ((IMAGE_WIDTH - 1) as f64);
+    //         let v: f64 = (j as f64 + util::rand()) / ((IMAGE_HEIGHT - 1) as f64);
+    //         let ray = camera.get_ray(u, v);
+    //         let res: Vector3<f64> = geometry::cast_ray(&ray, &vec, MAX_DEPTH);
+    //         util::increment_color(&mut pixels, j as usize, i as usize, &res);
+    //     }
+    // }
+
+    // println!("Finished with first pass");
+
     let pixels_mutex: Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>> = Arc::new(Mutex::new(pixels));
     let vec_arc: Arc<Vec<Box<dyn Hittable>>> = Arc::new(vec);
 

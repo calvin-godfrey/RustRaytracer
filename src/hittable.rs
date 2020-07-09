@@ -3,7 +3,6 @@ use nalgebra::geometry::Point3;
 use crate::material::materials::Material;
 use crate::geometry::Ray;
 use crate::parser;
-use crate::consts::*;
 
 #[derive(Copy, Clone)]
 pub struct HitRecord<'a> {
@@ -111,6 +110,7 @@ impl Mesh {
         let pvec: Vector3<f64> = dir.cross(&temp2);
         let det: f64 = temp1.dot(&pvec);
         let inv_det = 1. / det;
+
         let tvec = ray.origin - p0;
         let u = pvec.dot(&tvec) * inv_det;
 
@@ -137,13 +137,9 @@ impl Mesh {
             None
         } else {
             let uv1 = self.uv[self.ind[ind]].scale(1. - u - v);
-            let uv2 = self.uv[self.ind[ind + 1]]; //.scale(v);
-            let uv3 = self.uv[self.ind[ind + 2]]; //.scale(u);
-            let option1 = uv1 + uv2.scale(v) + uv3.scale(u);
-            let option2 = uv1 + uv2.scale(u) + uv3.scale(v);
-            // println!("({:.4}, {:.4}), ({:.4}, {:.4})", uv2.x, uv2.y, uv3.x, uv3.y);
-            // println!("{:.4}, {:.4} vs. {:.4}, {:.4} ({:.4}, {:.4})", option1.x, option1.y, option2.x, option2.y, u, v);
-            Some(option2)
+            let uv2 = self.uv[self.ind[ind + 1]].scale(u);
+            let uv3 = self.uv[self.ind[ind + 2]].scale(v);
+            Some(uv1 + uv2 + uv3)
         };
 
         let mut record = HitRecord::new(t, normal, point, true, &self.mat);
