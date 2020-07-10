@@ -1,5 +1,5 @@
 use image::RgbImage;
-use nalgebra::base::{Unit, Vector3, Matrix};
+use nalgebra::base::{Vector3};
 use nalgebra::geometry::Point3;
 use std::thread;
 use std::sync::{Arc, Mutex};
@@ -10,115 +10,24 @@ mod material;
 mod hittable;
 mod geometry;
 mod parser;
+mod scenes;
 
 use consts::*;
-
 use material::materials;
-
-use hittable::{Hittable, Sphere, Mesh};
-
-use geometry::{Ray};
-
-#[derive(Copy, Clone)]
-struct Camera {
-    origin: Point3<f64>,
-    upper_left_corner: Point3<f64>,
-    horizontal_offset: Vector3<f64>,
-    vertical_offset: Vector3<f64>,
-    lens_radius: f64,
-    u: Unit<Vector3<f64>>, // horizontal
-    v: Unit<Vector3<f64>>, // vertical
-    w: Unit<Vector3<f64>>, // direction of sight
-}
-
-impl Camera {
-    fn new(from: Point3<f64>, to: Point3<f64>, up: Vector3<f64>, aspect_ratio: f64, vfov: f64, aperture: f64, focus_dist: f64) -> Self {
-        let w: Unit<Vector3<f64>> = Unit::new_normalize(from - to);
-        let u: Unit<Vector3<f64>> = Unit::new_normalize(Matrix::cross(&up, &w));
-        let v: Unit<Vector3<f64>> = Unit::new_normalize(Matrix::cross(&w, &u));
-
-        let theta = vfov * PI / 180.;
-        let h = (theta / 2.).tan();
-        let viewport_height = 2. * h;
-        let viewport_width = viewport_height * aspect_ratio;
-
-        let origin: Point3<f64> = from;
-        let horizontal_offset: Vector3<f64> = u.scale(viewport_width * focus_dist);
-        let vertical_offset: Vector3<f64> = v.scale(viewport_height * focus_dist);
-        // this is the point in world space that represents the bottom left corner of the plane that is being projected onto
-        let upper_left_corner: Point3<f64> = origin -
-                                             horizontal_offset.scale(0.5) +
-                                             vertical_offset.scale(0.5) -
-                                             w.as_ref().scale(focus_dist);
-
-        let lens_radius = aperture / 2.;
-        
-        return Self {origin, upper_left_corner, horizontal_offset, vertical_offset, lens_radius, u, v, w};
-    }
-
-    fn get_ray(&self, u: f64, v: f64) -> Ray {
-        let in_disk: Vector3<f64> = util::rand_in_disk().scale(self.lens_radius);
-        let offset = self.u.scale(in_disk.x) + self.v.scale(in_disk.y);
-
-        let to: Point3<f64> = self.upper_left_corner + self.horizontal_offset.scale(u) - self.vertical_offset.scale(v);
-        let dir: Vector3<f64> = to - self.origin;
-        // have to subtract offset from the direction so that it points back to where it was originally supposed to
-        return Ray::new(self.origin + offset, dir - offset);
-    }
-}
+use hittable::{Hittable};
+use geometry::Camera;
+#[allow(unused_imports)]
+use scenes::*;
 
 fn main() {
-    // let from: Point3<f64> = Point3::new(13., 2.,3.);
-    // let to: Point3<f64> = Point3::new(0., 0., 0.0);
-    // let up: Vector3<f64> = Vector3::new(0., 1., 0.);
-
-    let from = Point3::new(-200. * 0.8, -100. * 0.8, 100. * 0.8);
-    let to = Point3::new(0., -1., 10.);
-    let up = Vector3::new(0., 0., 1.);
-
-    let camera: Camera = Camera::new(from, to, up, ASPECT_RATIO, 20., 0.0, 10.);
-
-    let mesh: Mesh = hittable::Mesh::new("data/cat/cat.obj", false);
-
     let mut img = RgbImage::new(IMAGE_WIDTH, IMAGE_HEIGHT);
-    // let vec = make_world();
-    let mut vec: Vec<Box<dyn Hittable>> = Vec::new();
-    vec.push(Box::new(mesh));
+    let (camera, vec) = scenes::sphere_cat();
+
     if SINGLE_THREAD {
         singlethread(&mut img, PATH, &vec, &camera);
     } else {
         multithread(img, vec, camera);
     }
-}
-
-fn make_world() -> Vec<Box<dyn Hittable>> {
-    let mut world: Vec<Box<dyn Hittable>> = Vec::new();
-    let ground = Box::new(Sphere::new(Point3::new(0., -10000., 0.), 10000., Box::new(materials::Lambertian::new(Vector3::new(127., 127., 127.)))));
-    world.push(ground);
-
-    for a in -11..11 {
-        for b in -11..11 {
-            let center = Point3::new(a as f64 + 0.9*util::rand(), 0.2, b as f64 + 0.9 * util::rand());
-            if (center - Point3::new(4., 0.2, 0.)).norm() > 0.9 {
-                let mat = util::rand();
-                if mat < 0.6 { // matte
-                    let color: Vector3<f64> = Vector3::new(255. * util::rand() * util::rand_range(0.4, 0.8), 255. * util::rand() * util::rand_range(0.4, 0.8), 255. * util::rand() * util::rand_range(0.4, 0.8));
-                    world.push(Box::new(Sphere::new(center, 0.2, Box::new(materials::Lambertian::new(color)))));
-                } else if mat < 0.86 { // metal
-                    let color: Vector3<f64> = Vector3::new(util::rand_range(30., 200.), util::rand_range(30., 200.), util::rand_range(30., 200.));
-                    world.push(Box::new(Sphere::new(center, 0.2, Box::new(materials::Metal::new(color, util::rand_range(0., 0.5))))));
-                } else { // glass
-                    world.push(Box::new(Sphere::new(center, 0.2, Box::new(materials::Dielectric::new(util::rand_range(1.2, 1.8))))));
-                }
-            }
-        }
-    }
-
-    world.push(Box::new(Sphere::new(Point3::new(0., 1., 0.), 1., Box::new(materials::Dielectric::new(1.5)))));
-    world.push(Box::new(Sphere::new(Point3::new(-4., 1., 0.), 1., Box::new(materials::Lambertian::new(Vector3::new(102., 51., 25.))))));
-    world.push(Box::new(Sphere::new(Point3::new(4., 1., 0.), 1., Box::new(materials::Metal::new(Vector3::new(178.5, 153., 127.5), 0.05)))));
-
-    world
 }
 
 fn singlethread(img: &mut image::RgbImage, path: &str, vec: &Vec<Box<dyn Hittable>>, camera: &Camera) {

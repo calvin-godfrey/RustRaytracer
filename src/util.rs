@@ -7,6 +7,7 @@ use std::sync::{Mutex, Arc};
 
 use crate::consts::*;
 use crate::geometry;
+use crate::hittable;
 
 pub fn gradient(from: &Rgb<u8>, to: &Rgb<u8>, scale: f64) -> Rgb<u8> {
     let r: u8 = ((1.0 - scale) * from[0] as f64 + (scale * (to[0] as f64))) as u8;
@@ -145,3 +146,19 @@ pub fn get_sky(ray: &geometry::Ray) -> Vector3<f64> {
     let color = gradient(&white, &blue, 0.5 * (1.0 + unit.as_ref().y));
     return Vector3::new(color[0] as f64, color[1] as f64, color[2] as f64);
 }
+
+fn box_compare(a: &Box<dyn hittable::Hittable>, b: &Box<dyn hittable::Hittable>, axis: usize) -> std::cmp::Ordering {
+    let box_a = a.get_bounding_box(0., 0.);
+    let box_b = b.get_bounding_box(0., 0.);
+    if box_a.is_none() || box_b.is_none() {
+        println!("Error, cannot compare objects");
+        return std::cmp::Ordering::Equal;
+    }
+    let box_a = box_a.unwrap();
+    let box_b = box_b.unwrap();
+    return if box_a.min[axis] < box_b.min[axis] { std::cmp::Ordering::Less } else { std::cmp::Ordering::Greater }
+}
+
+pub fn box_x_compare(a: &&Box<dyn hittable::Hittable>, b: &&Box<dyn hittable::Hittable>) -> std::cmp::Ordering { box_compare(a, b, 0) }
+pub fn box_y_compare(a: &&Box<dyn hittable::Hittable>, b: &&Box<dyn hittable::Hittable>) -> std::cmp::Ordering { box_compare(a, b, 1) }
+pub fn box_z_compare(a: &&Box<dyn hittable::Hittable>, b: &&Box<dyn hittable::Hittable>) -> std::cmp::Ordering { box_compare(a, b, 2) }

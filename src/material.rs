@@ -17,7 +17,7 @@ pub mod materials {
         #[allow(unused_variables)]
         fn scatter(&self, ray: &Ray, hit_record: &HitRecord) -> Option<(Ray, Vector3<f64>)> {
             let dir: Vector3<f64> = hit_record.n.as_ref() + rand_in_hemisphere(hit_record.n.as_ref());
-            let ray = Ray::new(hit_record.p, dir);
+            let ray = Ray::new_time(hit_record.p, dir, ray.time);
             let color = self.albedo;
             Some((ray, color))
         }
@@ -35,7 +35,7 @@ pub mod materials {
     impl Material for Metal {
         fn scatter(&self, ray: &Ray, hit_record: &HitRecord) -> Option<(Ray, Vector3<f64>)> {
             let refl: Vector3<f64> = reflect(&ray.dir, &hit_record.n);
-            let new_ray = Ray::new(hit_record.p, refl + rand_in_unit_sphere().scale(self.roughness));
+            let new_ray = Ray::new_time(hit_record.p, refl + rand_in_unit_sphere().scale(self.roughness), ray.time);
             if refl.dot(hit_record.n.as_ref()) <= 0. {
                 None
             } else {
@@ -60,7 +60,7 @@ pub mod materials {
             let sint = (1. - cost * cost).sqrt();
             let prob = schlick(cost, etai);
             let new_dir: Vector3<f64> = if etai * sint > 1. || rand() < prob { reflect(unit_dir.as_ref(), &hit_record.n) } else { refract(&unit_dir, &hit_record.n, etai) };
-            return Some((Ray::new(hit_record.p, new_dir), Vector3::new(255., 255., 255.)));
+            return Some((Ray::new_time(hit_record.p, new_dir, ray.time), Vector3::new(255., 255., 255.)));
         }
     }
 
@@ -77,7 +77,7 @@ pub mod materials {
         #[allow(unused_variables)]
         fn scatter(&self, ray: &Ray, hit_record: &HitRecord) -> Option<(Ray, Vector3<f64>)> {
             let dir: Vector3<f64> = hit_record.n.as_ref() + rand_in_hemisphere(hit_record.n.as_ref());
-            let ray = Ray::new(hit_record.p, dir);
+            let ray = Ray::new_time(hit_record.p, dir, ray.time);
             let color: Vector3<f64>;
 
             match hit_record.uv {
