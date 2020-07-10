@@ -27,8 +27,16 @@ impl <'a> HitRecord<'a> {
 pub trait Hittable: Send + Sync {
     fn intersects(&self, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord>;
     fn get_bounding_box(&self, t0: f64, t1: f64) -> Option<BoundingBox>;
+    fn box_clone(&self) -> Box<dyn Hittable>;
 }
 
+impl Clone for Box<dyn Hittable> {
+    fn clone(&self) -> Self {
+        self.box_clone()
+    }
+}
+
+#[derive(Clone)]
 pub struct Sphere {
     center: Point3<f64>,
     r: f64,
@@ -75,8 +83,12 @@ impl Hittable for Sphere {
         let r_vector = Vector3::new(self.r, self.r, self.r);
         Some(BoundingBox::new(self.center - r_vector, self.center + r_vector))
     }
+    fn box_clone(&self) -> Box<dyn Hittable> {
+        Box::new(self.clone())
+    }
 }
 
+#[derive(Clone)]
 pub struct Mesh {
     // ith triangle has vertices at p[ind[3 * i]], ...
     // and normals at n[ind[3 * i]], ...
@@ -109,6 +121,10 @@ impl Hittable for Mesh {
             },
             None => None
         }
+    }
+
+    fn box_clone(&self) -> Box<dyn Hittable> {
+        Box::new(self.clone())
     }
 }
 
@@ -194,6 +210,12 @@ pub struct Triangle <'b> {
     bounding_box: Option<BoundingBox>
 }
 
+impl<'b> Clone for Triangle <'b> {
+    fn clone(&self) -> Self {
+        Self {id: self.id.clone(), bounding_box: self.bounding_box.clone(), mesh: self.mesh }
+    }
+}
+
 impl<'b> Hittable for Triangle<'b> {
     fn intersects(&self, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
         self.mesh.intersects_triangle(ray, self.id, tmin, tmax)
@@ -207,6 +229,10 @@ impl<'b> Hittable for Triangle<'b> {
             },
             None => None
         }
+    }
+
+    fn box_clone(&self) -> Box<dyn Hittable> {
+        Box::new(self.clone())
     }
 }
 
@@ -254,6 +280,7 @@ impl BoundingBox {
     }
 }
 
+#[derive(Clone)]
 pub struct MovingSphere {
     r: f64,
     mat: Box<dyn Material>,
@@ -314,13 +341,13 @@ impl Hittable for MovingSphere {
 }
 
 #[derive(Clone)]
-pub struct BvhNode<'c> {
+pub struct BvhNode {
     bounding_box: BoundingBox,
-    left: &'c Box<dyn Hittable>,
-    right: &'c Box<dyn Hittable>,
+    left: Box<dyn Hittable>,
+    right: Box<dyn Hittable>,
 }
 
-impl<'c> Hittable for BvhNode<'c> {
+impl Hittable for BvhNode {
     fn intersects(&self, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
         if !self.bounding_box.intersects(ray, tmin, tmax) {
             return None;
@@ -353,7 +380,7 @@ impl<'c> Hittable for BvhNode<'c> {
     
 }
 
-impl<'c> BvhNode<'c> {
+impl BvhNode {
     pub fn new(objects: Vec<Box<dyn Hittable>>, start: usize, end: usize, t0: f64, t1: f64) -> Self {
         let r = util::rand();
         let comp = if r < 1. / 3. {
@@ -364,18 +391,18 @@ impl<'c> BvhNode<'c> {
             util::box_z_compare
         };
         let num_obj = end - start;
-        let mut left: &Box<dyn Hittable>;
-        let mut right: &Box<dyn Hittable>;
+        let mut left: Box<dyn Hittable>;
+        let mut right: Box<dyn Hittable>;
         if num_obj == 1 {
-            left = &objects[start];
-            right = &objects[start];
+            left = objects[start];
+            right = objects[start];
         } else if num_obj == 2 {
             if comp(&&objects[start], &&objects[start + 1]) != Ordering::Greater {
-                left = &objects[start];
-                right = &objects[start + 1];
+                left = objects[start];
+                right = objects[start + 1];
             } else {
-                left = &objects[start + 1];
-                right = &objects[start];
+                left = objects[start + 1];
+                right = objects[start];
             }
         } else {
             let mut slice: Vec<&Box<dyn Hittable>> = Vec::new();
@@ -384,12 +411,15 @@ impl<'c> BvhNode<'c> {
             }
             slice.sort_by(comp);
             let mid = start + num_obj / 2;
-            let l: dyn Hittable = BvhNode::new(objects, start, mid, t0, t1);
+            let l = BvhNode::new(objects, start, mid, t0, t1);
             let r = BvhNode::new(objects, mid, end, t0, t1);
-            left = &Box::new(l);
-            right = &Box::new(BvhNode::new(objects, mid, end, t0, t1));
+            left = Box::new(l);
+            right = Box::new(r);
         }
-        Self { left: Box::new(), right: None, bounding_box: BoundingBox::new(Point3::origin(), Point3::origin()) }
+
+        
+
+        Self { left, right, bounding_box: BoundingBox::new(Point3::origin(), Point3::origin()) }
     }
 }
 
@@ -402,5 +432,5 @@ unsafe impl Send for MovingSphere {}
 unsafe impl Sync for MovingSphere {}
 unsafe impl<'b> Send for Triangle<'b> {}
 unsafe impl<'b> Sync for Triangle<'b> {}
-unsafe impl<'c> Send for BvhNode<'c> {}
-unsafe impl<'c> Sync for BvhNode<'c> {}
+unsafe impl Send for BvhNode {}
+unsafe impl Sync for BvhNode {}

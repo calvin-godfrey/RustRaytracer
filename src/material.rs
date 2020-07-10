@@ -7,12 +7,20 @@ pub mod materials {
 
     pub trait Material {
         fn scatter(&self, ray: &Ray, hit_record: &HitRecord) -> Option<(Ray, Vector3<f64>)>;
+        fn box_clone(&self) -> Box<dyn Material>;
+    }
+
+    impl Clone for Box<dyn Material> {
+        fn clone(&self) -> Self {
+            self.box_clone()
+        }
     }
     
+    #[derive(Clone)]
     pub struct Lambertian {
         albedo: Vector3<f64>,
     }
-    
+      
     impl Material for Lambertian {
         #[allow(unused_variables)]
         fn scatter(&self, ray: &Ray, hit_record: &HitRecord) -> Option<(Ray, Vector3<f64>)> {
@@ -21,12 +29,16 @@ pub mod materials {
             let color = self.albedo;
             Some((ray, color))
         }
+        fn box_clone(&self) -> Box<dyn Material> {
+            Box::new(self.clone())
+        }
     }
     
     impl Lambertian {
         pub fn new(albedo: Vector3<f64>) -> Self { Self { albedo } }
     }
     
+    #[derive(Clone)]
     pub struct Metal {
         albedo: Vector3<f64>,
         roughness: f64,
@@ -42,12 +54,16 @@ pub mod materials {
                 Some((new_ray, self.albedo))
             }
         }
+        fn box_clone(&self) -> Box<dyn Material> {
+            Box::new(self.clone())
+        }
     }
     
     impl Metal {
         pub fn new(albedo: Vector3<f64>, roughness: f64) -> Self { Self { albedo, roughness } }
     }
 
+    #[derive(Clone)]
     pub struct Dielectric {
         index: f64,
     }
@@ -62,12 +78,16 @@ pub mod materials {
             let new_dir: Vector3<f64> = if etai * sint > 1. || rand() < prob { reflect(unit_dir.as_ref(), &hit_record.n) } else { refract(&unit_dir, &hit_record.n, etai) };
             return Some((Ray::new_time(hit_record.p, new_dir, ray.time), Vector3::new(255., 255., 255.)));
         }
+        fn box_clone(&self) -> Box<dyn Material> {
+            Box::new(self.clone())
+        }
     }
 
     impl Dielectric {
         pub fn new(index: f64) -> Self { Self { index } }
     }
 
+    #[derive(Clone)]
     pub struct Texture {
         img: RgbImage,
         backup: Vector3<f64>,
@@ -94,6 +114,9 @@ pub mod materials {
             }
 
             Some((ray, color))
+        }
+        fn box_clone(&self) -> Box<dyn Material> {
+            Box::new(self.clone())
         }
     }
 
