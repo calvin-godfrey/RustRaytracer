@@ -2,55 +2,110 @@ use nalgebra::base::{Unit, Vector3, Vector2, Matrix4};
 use nalgebra::geometry::Point3;
 use std::cmp::Ordering;
 use std::sync::Arc;
-use crate::material::materials::{Material, Lambertian};
+use crate::material::materials::Material;
 use crate::geometry::Ray;
 use crate::parser;
 use crate::util;
 
-#[derive(Copy, Clone)]
-pub struct HitRecord<'a> {
+#[derive(Clone)]
+pub struct HitRecord {
     pub t: f64, // time of hit along ray
     pub n: Unit<Vector3<f64>>, // normal of surface at point
     pub p: Point3<f64>, // point of intersection
     pub front: bool, // if the normal points outwards or not
-    pub mat: &'a Box<dyn Material>, // how the surface acts
+    pub mat: Arc<dyn Material>, // how the surface acts
     pub uv: Option<Vector2<f64>>, // uv texture coordinates
 }
 
-impl <'a> HitRecord<'a> {
-    pub fn new(t: f64, n: Unit<Vector3<f64>>, p: Point3<f64>, front: bool, mat: &'a Box<dyn Material>) -> Self { Self { t, n, p, front, mat, uv: None } }
+impl HitRecord {
+    pub fn new(t: f64, n: Unit<Vector3<f64>>, p: Point3<f64>, front: bool, mat: Arc<dyn Material>) -> Self { Self { t, n, p, front, mat, uv: None } }
     pub fn set_front(&mut self, ray: &Ray) {
         self.front = ray.dir.dot(self.n.as_ref()) < 0.0;
         self.n = if self.front { self.n } else { -self.n }
     }
 }
 
-pub trait Hittable: Send + Sync {
-    fn intersects(&self, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord>;
-    fn get_bounding_box(&self, t0: f64, t1: f64) -> Option<BoundingBox>;
+pub enum Primitive {
+    Sphere {
+        center: Point3<f64>,
+        r: f64,
+        mat: Arc<dyn Material>,
+        bounding_box: Option<BoundingBox>,
+    },
+    Triangle {
+        mesh: Arc<Mesh>,
+        ind: usize,
+        bounding_box: Option<BoundingBox>,
+    },
+    MovingSphere {
+        r: f64,
+        mat: Arc<dyn Material>,
+        t0: f64,
+        t1: f64,
+        c0: Point3<f64>,
+        c1: Point3<f64>,
+        bounding_box: Option<BoundingBox>,
+    },
+    Empty
 }
 
-#[derive(Clone)]
-pub struct Sphere {
-    center: Point3<f64>,
-    r: f64,
-    mat: Box<dyn Material>,
-}
+impl Primitive {
+    pub fn new_sphere(center: Point3<f64>, r: f64, mat: Arc<dyn Material>) -> Self {
+        let r_vec = Vector3::new(r, r, r);
+        let min = center - r_vec;
+        let max = center + r_vec;
+        let bounding_box = Some(BoundingBox::new(min, max));
+        Primitive::Sphere {center, r, mat, bounding_box }
+    }
 
-impl Sphere {
-    pub fn new(center: Point3<f64>, r: f64, mat: Box<dyn Material>) -> Self { Self { center, r, mat } }
-    pub fn default() -> Self {
-        Self { center: Point3::origin(), r: 0., mat: Box::new(Lambertian::new(Vector3::new(0., 0., 0.))) }
+    #[allow(unused_variables)]
+    pub fn intersects(obj: &Primitive, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
+        match obj {
+            Primitive::Sphere { center, r, mat, bounding_box } => {sphere_intersect(center, r, mat, ray, tmin, tmax)}
+            Primitive::Triangle { mesh, ind, bounding_box } => {mesh.intersects_triangle(ray, *ind, tmin, tmax)}
+            Primitive::MovingSphere { r, mat, t0, t1, c0, c1, bounding_box } => {moving_sphere_intersect(*r, mat, *t0, *t1, c0, c1, ray, tmin, tmax)}
+            Primitive::Empty => {None}
+        }
+    }
+
+    #[allow(unused_variables)]
+    pub fn get_bounding_box(obj: &Primitive, time0: f64, time1: f64) -> &Option<BoundingBox> {
+        match obj {
+            Primitive::Sphere { center, r, mat, bounding_box } => {
+                bounding_box
+            }
+            Primitive::Triangle { mesh, ind, bounding_box } => {bounding_box}
+            Primitive::MovingSphere { r, mat, t0, t1, c0, c1, bounding_box } => {
+                bounding_box
+            }
+            Primitive::Empty => {&None}
+        }
     }
 }
 
-impl Hittable for Sphere {
-    fn intersects(&self, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
-        let diff: Vector3<f64> = ray.origin - self.center;
+pub fn make_sphere(center: Point3<f64>, r: f64, mat: Arc<dyn Material>) -> Primitive {
+    Primitive::new_sphere(center, r, mat)
+}
+
+pub fn make_moving_sphere(c0: Point3<f64>, c1: Point3<f64>, t0: f64, t1: f64, r: f64, mat: Arc<dyn Material>) -> Primitive {
+    let c0 = moving_sphere_center(&c0, &c1, t0, t1, t0);
+    let c1 = moving_sphere_center(&c0, &c1, t0, t1, t1);
+    let min0 = Point3::new(c0.x - r, c0.y - r, c0.z - r);
+    let max0 = Point3::new(c0.x + r, c0.y + r, c0.z + r);
+    let min1 = Point3::new(c1.x - r, c1.y - r, c1.z - r);
+    let max1 = Point3::new(c1.x + r, c1.y + r, c1.z + r);
+    let bbox1 = BoundingBox::new(min0, max0);
+    let bbox2 = BoundingBox::new(min1, max1);
+    let bounding_box = BoundingBox::union(&bbox1, &bbox2);
+    Primitive::MovingSphere { c0, c1, t0, t1, r, mat, bounding_box: Some(bounding_box) }
+}
+
+fn sphere_intersect(center: &Point3<f64>, r: &f64, mat: &Arc<dyn Material>, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
+    let diff: Vector3<f64> = ray.origin - center;
         // get quadratic equation, calculate discriminant
         let a = ray.dir.dot(&ray.dir);
         let b = diff.dot(&ray.dir);
-        let c = diff.dot(&diff) - self.r * self.r;
+        let c = diff.dot(&diff) - r * r;
         let disc = b * b - a * c;
         if disc < 0.0 {
             return None;
@@ -60,29 +115,57 @@ impl Hittable for Sphere {
         let ans = (-b - root) * inv_a; // try first solution to equation
         if ans < tmax && ans > tmin {
             let hit = ray.at(ans);
-            let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - self.center), hit, true, &self.mat);
+            let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, Arc::clone(&mat));
             hit_record.set_front(ray);
             return Some(hit_record);
         }
         let ans = (-b + root) * inv_a;
         if ans < tmax && ans > tmin {
             let hit = ray.at(ans);
-            let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - self.center), hit, true, &self.mat);
+            let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, Arc::clone(&mat));
             hit_record.set_front(ray);
             return Some(hit_record);
         } else {
             return None;
         }
-    }
+}
 
-    #[allow(unused_variables)]
-    fn get_bounding_box(&self, t0: f64, t1: f64) -> Option<BoundingBox> {
-        let r_vector = Vector3::new(self.r, self.r, self.r);
-        Some(BoundingBox::new(self.center - r_vector, self.center + r_vector))
+fn moving_sphere_intersect(r: f64, mat: &Arc<dyn Material>, t0: f64, t1: f64, c0: &Point3<f64>, c1: &Point3<f64>, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
+    let center = moving_sphere_center(c0, c1, t0, t1, ray.time);
+    let diff: Vector3<f64> = ray.origin - center;
+    // get quadratic equation, calculate discriminant
+    let a = ray.dir.dot(&ray.dir);
+    let b = diff.dot(&ray.dir);
+    let c = diff.dot(&diff) - r * r;
+    let disc = b * b - a * c;
+    if disc < 0.0 {
+        return None;
+    }
+    let inv_a = 1.0 / a;
+    let root = disc.sqrt();
+    let ans = (-b - root) * inv_a; // try first solution to equation
+    if ans < tmax && ans > tmin {
+        let hit = ray.at(ans);
+        let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, Arc::clone(mat));
+        hit_record.set_front(ray);
+        return Some(hit_record);
+    }
+    let ans = (-b + root) * inv_a;
+    if ans < tmax && ans > tmin {
+        let hit = ray.at(ans);
+        let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, Arc::clone(mat));
+        hit_record.set_front(ray);
+        return Some(hit_record);
+    } else {
+        return None;
     }
 }
 
-#[derive(Clone)]
+fn moving_sphere_center(c0: &Point3<f64>, c1: &Point3<f64>, t0: f64, t1: f64, time: f64) -> Point3<f64> {
+    let diff: Vector3<f64> = c1 - c0;
+    c0 + (time - t0) / (t1 - t0) * diff
+}
+
 pub struct Mesh {
     // ith triangle has vertices at p[ind[3 * i]], ...
     // and normals at n[ind[3 * i]], ...
@@ -91,40 +174,30 @@ pub struct Mesh {
     pub n: Vec<Vector3<f64>>,
     pub uv: Vec<Vector2<f64>>,
     pub bounding_box: Option<BoundingBox>,
-    pub mat: Box<dyn Material>,
+    pub mat: Arc<dyn Material>,
 }
 
-impl Hittable for Mesh {
-    fn intersects(&self, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
-        if let Some(bbox) = &self.bounding_box {
-            if !bbox.intersects(ray, tmin, tmax) { return None; }
-        }
-        let records: Vec<HitRecord> = (0..self.ind.len()).step_by(3).filter_map(|ind| self.intersects_triangle(ray, ind, tmin, tmax)).collect();
-        let rec = records.iter().min_by(|x, y| x.t.partial_cmp(&y.t).unwrap());
-        match rec {
-            Some(r) => return Some(*r),
-            None => return None
-        }
-    }
-
-    #[allow(unused_variables)]
-    fn get_bounding_box(&self, t0: f64, f1: f64) -> Option<BoundingBox> {
-        match self.bounding_box {
-            Some(bbox) => {
-                Some(bbox.clone())
-            },
-            None => None
-        }
-    }
-}
+// impl Mesh {
+//     fn intersects(&self, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
+//         if let Some(bbox) = &self.bounding_box {
+//             if !bbox.intersects(ray, tmin, tmax) { return None; }
+//         }
+//         let records: Vec<HitRecord> = (0..self.ind.len()).step_by(3).filter_map(|ind| self.intersects_triangle(ray, ind, tmin, tmax)).collect();
+//         let rec = records.iter().min_by(|x, y| x.t.partial_cmp(&y.t).unwrap());
+//         match rec {
+//             Some(r) => return Some(r),
+//             None => return None
+//         }
+//     }
+// }
 
 impl Mesh {
     pub fn new(path: &str, trans: Matrix4<f64>) -> Self {
         parser::parse_obj(path, trans)
     }
 
-    pub fn generate_triangles(mesh: &Arc<Self>) -> Vec<Box<Triangle>> {
-        let mut triangles: Vec<Box<Triangle>> = Vec::new();
+    pub fn generate_triangles(mesh: &Arc<Self>) -> Vec<Box<Primitive>> {
+        let mut triangles: Vec<Box<Primitive>> = Vec::new();
         for index in (0..mesh.ind.len()).step_by(3) {
             let v1 = mesh.p[mesh.ind[index]];
             let v2 = mesh.p[mesh.ind[index + 1]];
@@ -136,7 +209,7 @@ impl Mesh {
             let z_min = v1.z.min(v2.z.min(v3.z));
             let z_max = v1.z.max(v2.z.max(v3.z));
             let tri_box = BoundingBox::new(Point3::new(x_min, y_min, z_min), Point3::new(x_max, y_max, z_max));
-            let tri: Box<Triangle> = Box::new(Triangle::new(Arc::clone(mesh), index, Some(tri_box)));
+            let tri: Box<Primitive> = Box::new(Primitive::Triangle {mesh: Arc::clone(mesh), ind: index, bounding_box: Some(tri_box)});
             triangles.push(tri);
         }
         triangles
@@ -187,43 +260,13 @@ impl Mesh {
             Some(uv1 + uv2 + uv3)
         };
 
-        let mut record = HitRecord::new(t, normal, point, true, &self.mat);
+        let mut record = HitRecord::new(t, normal, point, true, Arc::clone(&self.mat));
         record.set_front(ray);
         record.uv = uv;
         Some(record)
     }
 }
 
-#[derive(Clone)]
-pub struct Triangle {
-    ind: usize,
-    mesh: Arc<Mesh>,
-    bounding_box: Option<BoundingBox>,
-}
-
-impl Hittable for Triangle {
-    fn intersects(&self, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
-        self.mesh.intersects_triangle(ray, self.ind, tmin, tmax)
-    }
-
-    #[allow(unused_variables)]
-    fn get_bounding_box(&self, t0: f64, f1: f64) -> Option<BoundingBox> {
-        match self.bounding_box {
-            Some(bbox) => {
-                Some(bbox.clone())
-            },
-            None => None
-        }
-    }
-}
-
-impl Triangle {
-    pub fn new(mesh: Arc<Mesh>, ind: usize, bounding_box: Option<BoundingBox>) -> Self {
-        Self { mesh, ind, bounding_box }
-    }
-}
-
-#[derive(Copy, Clone)]
 pub struct BoundingBox {
     pub min: Point3<f64>,
     pub max: Point3<f64>,
@@ -262,109 +305,71 @@ impl BoundingBox {
         );
         Self::new(min, max)
     }
-}
 
-#[derive(Clone)]
-pub struct MovingSphere {
-    r: f64,
-    mat: Box<dyn Material>,
-    t0: f64,
-    t1: f64,
-    c0: Point3<f64>,
-    c1: Point3<f64>,
-}
-
-impl MovingSphere {
-    pub fn new(c0: Point3<f64>, c1: Point3<f64>, t0: f64, t1: f64, r: f64, mat: Box<dyn Material>) -> Self { Self { r, mat, t0, t1, c0, c1 } }
-    pub fn center(&self, time: f64) -> Point3<f64> {
-        let diff: Vector3<f64> = self.c1 - self.c0;
-        self.c0 + (time - self.t0) / (self.t1 - self.t0) * diff
-    }
-}
-
-impl Hittable for MovingSphere {
-    fn intersects(&self, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
-        let center = self.center(ray.time);
-        let diff: Vector3<f64> = ray.origin - center;
-        // get quadratic equation, calculate discriminant
-        let a = ray.dir.dot(&ray.dir);
-        let b = diff.dot(&ray.dir);
-        let c = diff.dot(&diff) - self.r * self.r;
-        let disc = b * b - a * c;
-        if disc < 0.0 {
-            return None;
-        }
-        let inv_a = 1.0 / a;
-        let root = disc.sqrt();
-        let ans = (-b - root) * inv_a; // try first solution to equation
-        if ans < tmax && ans > tmin {
-            let hit = ray.at(ans);
-            let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, &self.mat);
-            hit_record.set_front(ray);
-            return Some(hit_record);
-        }
-        let ans = (-b + root) * inv_a;
-        if ans < tmax && ans > tmin {
-            let hit = ray.at(ans);
-            let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, &self.mat);
-            hit_record.set_front(ray);
-            return Some(hit_record);
-        } else {
-            return None;
-        }
-    }
-    fn get_bounding_box(&self, t0: f64, t1: f64) -> Option<BoundingBox> {
-        let c0 = self.center(t0);
-        let c1 = self.center(t1);
-        let r_vector = Vector3::new(self.r, self.r, self.r);
-        let bbox1 = BoundingBox::new(c0 - r_vector, c0 + r_vector);
-        let bbox2 = BoundingBox::new(c1 - r_vector, c1 + r_vector);
-        let bounding_box = BoundingBox::union(&bbox1, &bbox2);
-        Some(bounding_box)
-    }
-}
-
-pub struct BvhNode {
-    pub bounding_box: BoundingBox,
-    left: Box<dyn Hittable>,
-    right: Box<dyn Hittable>,
-}
-
-impl Hittable for BvhNode {
-    fn intersects(&self, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
-        if !self.bounding_box.intersects(ray, tmin, tmax) {
-            return None;
-        }
-        
-        let left_option = self.left.intersects(ray, tmin, tmax);
-        let right_option = self.right.intersects(ray, tmin, tmax);
-
-        match left_option {
-            Some(l) => {
-                match right_option {
-                    Some(r) => return if l.t < r.t { left_option } else { right_option },
-                    None => return left_option
-                }
+    pub fn make_copy(bounding_box: &Option<BoundingBox>) -> BoundingBox {
+        match bounding_box {
+            Some(x) => {
+                BoundingBox::new(x.min.clone(), x.max.clone())
             },
-            None => {
-                match right_option {
-                    Some(_) => return right_option,
-                    None => return None
-                }
-            }
+            None => panic!("Can't copy a None bounding box")
         }
-
     }
 
-    #[allow(unused_variables)]
-    fn get_bounding_box(&self, t0: f64, f1: f64) -> Option<BoundingBox> {
-        return Some(self.bounding_box.clone());
+    pub fn make_new(bounding_box: &BoundingBox) -> BoundingBox {
+        BoundingBox::new(bounding_box.min.clone(), bounding_box.max.clone())
     }
-    
+}
+
+pub enum BvhNode {
+    Internal {
+        left: Box<BvhNode>,
+        right: Box<BvhNode>,
+        bounding_box: BoundingBox,
+    },
+    Leaf {
+        obj: Box<Primitive>,
+        bounding_box: BoundingBox,
+    },
+    Empty
 }
 
 impl BvhNode {
-    pub fn new(objects: &mut Vec<Box<dyn Hittable>>, start: usize, end: usize, t0: f64, t1: f64) -> Self {
+    pub fn intersects(&self, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
+        match self {
+            BvhNode::Internal { left, right, bounding_box } => {
+                if !bounding_box.intersects(ray, tmin, tmax) {
+                    return None;
+                }
+                let left_option = left.intersects(ray, tmin, tmax);
+                let right_option = right.intersects(ray, tmin, tmax);
+
+                match &left_option {
+                    Some(l) => {
+                        match &right_option {
+                            Some(r) => return if l.t < r.t { left_option } else { right_option },
+                            None => return left_option
+                        }
+                    },
+                    None => {
+                        match right_option {
+                            Some(_) => return right_option,
+                            None => return None
+                        }
+                    }
+                }
+            }
+            BvhNode::Leaf { obj, bounding_box } => {
+                if !bounding_box.intersects(ray, tmin, tmax) {
+                    return None;
+                }
+                return Primitive::intersects(obj, ray, tmin, tmax);
+            }
+            BvhNode::Empty => { return None; }
+        }
+    }
+
+    #[allow(unused_variables)]
+    pub fn new(objects: &mut Vec<Box<Primitive>>, start: usize, end: usize, t0: f64, t1: f64) -> BvhNode {
         let r = util::rand();
         let comp = if r < 1. / 3. {
             util::box_x_compare
@@ -374,53 +379,84 @@ impl BvhNode {
             util::box_z_compare
         };
         let num_obj = end - start;
-        let left: Box<dyn Hittable>;
-        let right: Box<dyn Hittable>;
+        let final_left: BvhNode;
+        let final_right: BvhNode;
+        let curr: Box<Primitive>;
         if num_obj == 1 {
-            left = objects.remove(0);
-            right = Box::new(Sphere::default()); // 'empty' object
+            curr = objects.remove(0);
+            let bbox = Primitive::get_bounding_box(curr.as_ref(), t0, t1);
+            let bbox_copy = BoundingBox::make_copy(bbox);
+            return BvhNode::Leaf {obj: curr, bounding_box: bbox_copy};
         } else if num_obj == 2 {
             if comp(&objects[start], &objects[start + 1]) != Ordering::Greater {
-                left = objects.remove(0);
-                right = objects.remove(0);
+                curr = objects.remove(0);
+                let next = objects.remove(0);
+                return BvhNode::handle_two(curr, next, t0, t1);
             } else {
-                right = objects.remove(0);
-                left = objects.remove(0);
+                let next = objects.remove(0);
+                curr = objects.remove(0);
+                return BvhNode::handle_two(curr, next, t0, t1);
             }
         } else {
             let slice = &mut objects[start..end];
             slice.sort_by(comp);
             let mid = start + num_obj / 2;
-            let l = BvhNode::new(objects, start, mid, t0, t1);
-            let r = BvhNode::new(objects, start, end - mid, t0, t1);
-            left = Box::new(l);
-            right = Box::new(r);
+            final_left = BvhNode::new(objects, start, mid, t0, t1);
+            final_right = BvhNode::new(objects, start, end - mid, t0, t1);
         }
 
-        let left_box: Option<BoundingBox> = left.get_bounding_box(t0, t1);
-        let right_box: Option<BoundingBox> = right.get_bounding_box(t0, t1);
-        
-        if left_box.is_none() || right_box.is_none() {
-            println!("Error: No bounding box in Bvh Node");
-            panic!();
+        let left_box: Option<BoundingBox> = match &final_left {
+            BvhNode::Internal { left, right, bounding_box } => {Some(BoundingBox::make_new(bounding_box))}
+            BvhNode::Leaf { obj, bounding_box } => {Some(BoundingBox::make_new(bounding_box))}
+            BvhNode::Empty => { None }
+        };
+
+        let right_box: Option<BoundingBox> = match &final_right {
+            BvhNode::Internal { left, right, bounding_box } => {Some(BoundingBox::make_new(bounding_box))}
+            BvhNode::Leaf { obj, bounding_box } => {Some(BoundingBox::make_new(bounding_box))}
+            BvhNode::Empty => { None }
+        };
+
+        let curr_box: Option<BoundingBox> = match left_box {
+            Some(x) => {
+                match right_box {
+                    Some(y) => {
+                        Some(BoundingBox::union(&x, &y))
+                    },
+                    None => Some(x)
+                }
+            }
+            None => {
+                match right_box {
+                    Some(y) => {
+                        Some(y)
+                    },
+                    None => None
+                }
+            }
+        };
+
+        if curr_box.is_none() { // shouldn't happen
+            return BvhNode::Empty;
         }
+        BvhNode::Internal { left: Box::new(final_left), right: Box::new(final_right), bounding_box: curr_box.unwrap() }
+    }
 
-        let left_box = left_box.unwrap();
-        let right_box = right_box.unwrap();
-        let bounding_box = BoundingBox::union(&left_box, &right_box);
+    fn handle_two(curr: Box<Primitive>, next: Box<Primitive>, t0: f64, t1: f64) -> BvhNode {
+        let inner_bb = BoundingBox::make_copy(Primitive::get_bounding_box(next.as_ref(), t0, t1));
+        let curr_bb = BoundingBox::make_copy(Primitive::get_bounding_box(curr.as_ref(), t0, t1));
+        let bb = BoundingBox::union(&inner_bb, &curr_bb);
+        let inner_right = BvhNode::Leaf {obj: curr, bounding_box: curr_bb };
+        let inner_left = BvhNode::Leaf { obj: next, bounding_box: inner_bb };
 
-        Self { left, right, bounding_box }
+        BvhNode::Internal {left: Box::new(inner_left), right: Box::new(inner_right), bounding_box: bb}
     }
 }
 
 // to please compiler. It's needed for multithreading even though these traits are never used
-unsafe impl Send for Sphere {}
-unsafe impl Sync for Sphere {}
+unsafe impl Send for Primitive {}
+unsafe impl Sync for Primitive {}
 unsafe impl Send for Mesh {}
 unsafe impl Sync for Mesh {}
-unsafe impl Send for MovingSphere {}
-unsafe impl Sync for MovingSphere {}
-unsafe impl Send for Triangle {}
-unsafe impl Sync for Triangle {}
 unsafe impl Send for BvhNode {}
 unsafe impl Sync for BvhNode {}

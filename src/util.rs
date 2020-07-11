@@ -148,21 +148,29 @@ pub fn get_sky(ray: &geometry::Ray) -> Vector3<f64> {
 }
 
 #[allow(dead_code)]
-fn box_compare(a: &Box<dyn hittable::Hittable>, b: &Box<dyn hittable::Hittable>, axis: usize) -> std::cmp::Ordering {
-    let box_a = a.get_bounding_box(0., 0.);
-    let box_b = b.get_bounding_box(0., 0.);
+fn box_compare(a: &Box<hittable::Primitive>, b: &Box<hittable::Primitive>, axis: usize) -> std::cmp::Ordering {
+    let box_a = hittable::Primitive::get_bounding_box(a.as_ref(), 0., 0.);
+    let box_b = hittable::Primitive::get_bounding_box(b.as_ref(), 0., 0.);
     if box_a.is_none() || box_b.is_none() {
         println!("Error, cannot compare objects");
         return std::cmp::Ordering::Equal;
     }
-    let box_a = box_a.unwrap();
-    let box_b = box_b.unwrap();
-    return if box_a.min[axis] < box_b.min[axis] { std::cmp::Ordering::Less } else { std::cmp::Ordering::Greater }
+    match box_a {
+        Some(bound_a) => {
+            match box_b {
+                Some(bound_b) => {
+                    return if bound_a.min[axis] < bound_b.min[axis] { std::cmp::Ordering::Less } else { std::cmp::Ordering::Greater }
+                }
+                None => {panic!("Code in box_compare should not be reached: 1")}
+            }
+        }
+        None => {panic!("Code in box_compare should not be reached: 2")}
+    }
 }
 
 #[allow(dead_code)]
-pub fn box_x_compare(a: &Box<dyn hittable::Hittable>, b: &Box<dyn hittable::Hittable>) -> std::cmp::Ordering { box_compare(a, b, 0) }
+pub fn box_x_compare(a: &Box<hittable::Primitive>, b: &Box<hittable::Primitive>) -> std::cmp::Ordering { box_compare(a, b, 0) }
 #[allow(dead_code)]
-pub fn box_y_compare(a: &Box<dyn hittable::Hittable>, b: &Box<dyn hittable::Hittable>) -> std::cmp::Ordering { box_compare(a, b, 1) }
+pub fn box_y_compare(a: &Box<hittable::Primitive>, b: &Box<hittable::Primitive>) -> std::cmp::Ordering { box_compare(a, b, 1) }
 #[allow(dead_code)]
-pub fn box_z_compare(a: &Box<dyn hittable::Hittable>, b: &Box<dyn hittable::Hittable>) -> std::cmp::Ordering { box_compare(a, b, 2) }
+pub fn box_z_compare(a: &Box<hittable::Primitive>, b: &Box<hittable::Primitive>) -> std::cmp::Ordering { box_compare(a, b, 2) }

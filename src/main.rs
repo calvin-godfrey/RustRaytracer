@@ -14,23 +14,23 @@ mod scenes;
 
 use consts::*;
 use material::materials;
-use hittable::{Hittable};
+use hittable::BvhNode;
 use geometry::Camera;
 #[allow(unused_imports)]
 use scenes::*;
 
 fn main() {
     let mut img = RgbImage::new(IMAGE_WIDTH, IMAGE_HEIGHT);
-    let (camera, vec) = scenes::sphere_cat();
+    let (camera, node) = scenes::sphere_cat_bvh();
 
     if SINGLE_THREAD {
-        singlethread(&mut img, PATH, &vec, &camera);
+        singlethread(&mut img, PATH, &node, &camera);
     } else {
-        multithread(img, vec, camera);
+        multithread(img, node, camera);
     }
 }
 
-fn singlethread(img: &mut image::RgbImage, path: &str, vec: &Vec<Box<dyn Hittable>>, camera: &Camera) {
+fn singlethread(img: &mut image::RgbImage, path: &str, node: &BvhNode, camera: &Camera) {
     if !COLS {
         let mut pixels: Vec<Vec<(f64, f64, f64, u32)>> = Vec::new();
         for _ in 0..IMAGE_HEIGHT {
@@ -52,7 +52,7 @@ fn singlethread(img: &mut image::RgbImage, path: &str, vec: &Vec<Box<dyn Hittabl
             let u: f64 = util::rand();
             let v: f64 = util::rand();
             let ray = camera.get_ray(u, v);
-            let res = geometry::cast_ray(&ray, &vec, MAX_DEPTH);
+            let res = geometry::cast_ray(&ray, &node, MAX_DEPTH);
             let i = (u * IMAGE_WIDTH as f64).floor() as usize;
             let j = (v * IMAGE_HEIGHT as f64).floor() as usize;
             util::increment_color(&mut pixels, j, i, &res);
@@ -67,7 +67,7 @@ fn singlethread(img: &mut image::RgbImage, path: &str, vec: &Vec<Box<dyn Hittabl
                     let u: f64 = (i as f64 + util::rand()) / ((IMAGE_WIDTH - 1) as f64);
                     let v: f64 = (j as f64 + util::rand()) / ((IMAGE_HEIGHT - 1) as f64);
                     let ray = camera.get_ray(u, v);
-                    let res: Vector3<f64> = geometry::cast_ray(&ray, &vec, MAX_DEPTH);
+                    let res: Vector3<f64> = geometry::cast_ray(&ray, &node, MAX_DEPTH);
                     color = color + res;
                 }
                 util::draw_color(img, i, j, &color, SAMPLES_PER_PIXEL);
@@ -80,7 +80,7 @@ fn singlethread(img: &mut image::RgbImage, path: &str, vec: &Vec<Box<dyn Hittabl
     img.save(path).unwrap();
 }
 
-fn multithread (img: image::RgbImage, vec: Vec<Box<dyn Hittable>>, camera: Camera) {
+fn multithread (img: image::RgbImage, node: BvhNode, camera: Camera) {
     let mut pixels: Vec<Vec<(f64, f64, f64, u32)>> = Vec::new();
     for _ in 0..IMAGE_HEIGHT {
         let mut temp: Vec<(f64, f64, f64, u32)> = Vec::new();
@@ -107,7 +107,7 @@ fn multithread (img: image::RgbImage, vec: Vec<Box<dyn Hittable>>, camera: Camer
     // println!("Finished with first pass");
 
     let pixels_mutex: Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>> = Arc::new(Mutex::new(pixels));
-    let vec_arc: Arc<Vec<Box<dyn Hittable>>> = Arc::new(vec);
+    let node_arc: Arc<BvhNode> = Arc::new(node);
 
     let image_arc: Arc<Mutex<image::RgbImage>> = Arc::new(Mutex::new(img));
 
@@ -115,7 +115,7 @@ fn multithread (img: image::RgbImage, vec: Vec<Box<dyn Hittable>>, camera: Camer
 
     for thread_num in 0..NUM_THREADS {
         let camera_clone = camera.clone();
-        let vec_clone = Arc::clone(&vec_arc);
+        let node_clone = Arc::clone(&node_arc);
         let pixels_clone = Arc::clone(&pixels_mutex);
         let image_clone = Arc::clone(&image_arc);
 
@@ -130,7 +130,7 @@ fn multithread (img: image::RgbImage, vec: Vec<Box<dyn Hittable>>, camera: Camer
                 let u: f64 = util::rand();
                 let v: f64 = util::rand();
                 let ray = camera_clone.get_ray(u, v);
-                let res = geometry::cast_ray(&ray, &vec_clone, MAX_DEPTH);
+                let res = geometry::cast_ray(&ray, &node_clone, MAX_DEPTH);
                 let i = (u * IMAGE_WIDTH as f64).floor() as usize;
                 let j = (v * IMAGE_HEIGHT as f64).floor() as usize;
                 util::thread_safe_increment_color(&pixels_clone, j, i, &res);
