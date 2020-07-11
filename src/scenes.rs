@@ -1,5 +1,6 @@
 use nalgebra::base::{Matrix4, Vector3};
 use nalgebra::geometry::{Point3, Rotation3};
+use std::sync::Arc;
 use crate::hittable::*;
 use crate::consts::*;
 use crate::materials;
@@ -18,7 +19,6 @@ pub fn sphere_cat() -> (geometry::Camera, Vec<Box<dyn Hittable>>) {
     let transform = transform * rot;
 
     let mesh = Mesh::new("data/cat/cat.obj", transform);
-    let triangles: Vec<Triangle> = Mesh::generate_triangles(&mesh); // TODO: Use
     let sphere = Sphere::new(Point3::new(70., -20., 10.), 50., Box::new(materials::Metal::new(Vector3::new(178.5, 153., 127.5), 0.)));
     let other = Sphere::new(Point3::new(0., -1000., 0.), 950., Box::new(materials::Metal::new(Vector3::new(128., 153., 150.), 0.1)));
 
@@ -102,4 +102,38 @@ pub fn make_world_moving() -> (geometry::Camera, Vec<Box<dyn Hittable>>) {
     world.push(Box::new(Sphere::new(Point3::new(4., 1., 0.), 1., Box::new(materials::Metal::new(Vector3::new(178.5, 153., 127.5), 0.05)))));
 
     (camera, world)
+}
+
+#[allow(dead_code)]
+pub fn sphere_cat_bvh() -> (geometry::Camera, Vec<Box<dyn Hittable>>) {
+    let from = Point3::new(-200. * 0.3, -100. * 0.3, 100. * 0.6);
+    let to = Point3::new(50., -35., 0.);
+    let up = Vector3::new(0., 1., 0.);
+    let camera = geometry::Camera::new(from, to, up, ASPECT_RATIO, 50., 0.0, 10.);
+
+    let transform: Matrix4<f64> = Matrix4::identity().append_translation(&Vector3::new(0., -50., 0.));
+    let rot: Matrix4<f64> = Rotation3::from_euler_angles(-PI / 2., 0., 0.).to_homogeneous();
+    let transform = transform * rot;
+
+    let mesh = Mesh::new("data/cat/cat.obj", transform);
+    println!("Finished parsing mesh");
+    let arc_mesh = Arc::new(mesh);
+    let triangles = Mesh::generate_triangles(&arc_mesh);
+    println!("Finished generating triangles");
+    let sphere = Sphere::new(Point3::new(70., -20., 10.), 50., Box::new(materials::Metal::new(Vector3::new(178.5, 153., 127.5), 0.)));
+    let other = Sphere::new(Point3::new(0., -1000., 0.), 950., Box::new(materials::Metal::new(Vector3::new(128., 153., 150.), 0.1)));
+
+    let mut vec: Vec<Box<dyn Hittable>> = Vec::new();
+    vec.push(Box::new(sphere));
+    vec.push(Box::new(other));
+    for tri in triangles {
+        vec.push(tri);
+    }
+    let len = vec.len();
+    let node: BvhNode = BvhNode::new(&mut vec, 0, len, 0., 0.);
+    println!("Made bvh");
+    println!("{:#?}, {:#?}", node.bounding_box.min, node.bounding_box.max);
+    let boxed_node: Box<dyn Hittable> = Box::new(node);
+    let new_vec = vec![boxed_node];
+    (camera, new_vec)
 }

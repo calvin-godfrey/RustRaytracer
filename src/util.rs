@@ -147,6 +147,7 @@ pub fn get_sky(ray: &geometry::Ray) -> Vector3<f64> {
     return Vector3::new(color[0] as f64, color[1] as f64, color[2] as f64);
 }
 
+#[allow(dead_code)]
 fn box_compare(a: &Box<dyn hittable::Hittable>, b: &Box<dyn hittable::Hittable>, axis: usize) -> std::cmp::Ordering {
     let box_a = a.get_bounding_box(0., 0.);
     let box_b = b.get_bounding_box(0., 0.);
@@ -159,6 +160,9 @@ fn box_compare(a: &Box<dyn hittable::Hittable>, b: &Box<dyn hittable::Hittable>,
     return if box_a.min[axis] < box_b.min[axis] { std::cmp::Ordering::Less } else { std::cmp::Ordering::Greater }
 }
 
-pub fn box_x_compare(a: &&Box<dyn hittable::Hittable>, b: &&Box<dyn hittable::Hittable>) -> std::cmp::Ordering { box_compare(a, b, 0) }
-pub fn box_y_compare(a: &&Box<dyn hittable::Hittable>, b: &&Box<dyn hittable::Hittable>) -> std::cmp::Ordering { box_compare(a, b, 1) }
-pub fn box_z_compare(a: &&Box<dyn hittable::Hittable>, b: &&Box<dyn hittable::Hittable>) -> std::cmp::Ordering { box_compare(a, b, 2) }
+#[allow(dead_code)]
+pub fn box_x_compare(a: &Box<dyn hittable::Hittable>, b: &Box<dyn hittable::Hittable>) -> std::cmp::Ordering { box_compare(a, b, 0) }
+#[allow(dead_code)]
+pub fn box_y_compare(a: &Box<dyn hittable::Hittable>, b: &Box<dyn hittable::Hittable>) -> std::cmp::Ordering { box_compare(a, b, 1) }
+#[allow(dead_code)]
+pub fn box_z_compare(a: &Box<dyn hittable::Hittable>, b: &Box<dyn hittable::Hittable>) -> std::cmp::Ordering { box_compare(a, b, 2) }

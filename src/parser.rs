@@ -14,7 +14,6 @@ pub fn parse_obj(path: &str, trans: Matrix4<f64>) -> hittable::Mesh {
 
     let mut min: Point3<f64> = Point3::new(INFINITY, INFINITY,  INFINITY);
     let mut max: Point3<f64> = Point3::new(-INFINITY, -INFINITY, -INFINITY);
-    let mut triangles: Vec<hittable::Triangle> = Vec::new();
     
     match obj_res {
         Ok((models, mats)) => {

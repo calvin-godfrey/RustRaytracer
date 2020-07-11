@@ -1,7 +1,8 @@
 use nalgebra::base::{Unit, Vector3, Vector2, Matrix4};
 use nalgebra::geometry::Point3;
 use std::cmp::Ordering;
-use crate::material::materials::Material;
+use std::sync::Arc;
+use crate::material::materials::{Material, Lambertian};
 use crate::geometry::Ray;
 use crate::parser;
 use crate::util;
@@ -27,13 +28,6 @@ impl <'a> HitRecord<'a> {
 pub trait Hittable: Send + Sync {
     fn intersects(&self, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord>;
     fn get_bounding_box(&self, t0: f64, t1: f64) -> Option<BoundingBox>;
-    fn box_clone(&self) -> Box<dyn Hittable>;
-}
-
-impl Clone for Box<dyn Hittable> {
-    fn clone(&self) -> Self {
-        self.box_clone()
-    }
 }
 
 #[derive(Clone)]
@@ -45,6 +39,9 @@ pub struct Sphere {
 
 impl Sphere {
     pub fn new(center: Point3<f64>, r: f64, mat: Box<dyn Material>) -> Self { Self { center, r, mat } }
+    pub fn default() -> Self {
+        Self { center: Point3::origin(), r: 0., mat: Box::new(Lambertian::new(Vector3::new(0., 0., 0.))) }
+    }
 }
 
 impl Hittable for Sphere {
@@ -83,9 +80,6 @@ impl Hittable for Sphere {
         let r_vector = Vector3::new(self.r, self.r, self.r);
         Some(BoundingBox::new(self.center - r_vector, self.center + r_vector))
     }
-    fn box_clone(&self) -> Box<dyn Hittable> {
-        Box::new(self.clone())
-    }
 }
 
 #[derive(Clone)]
@@ -122,10 +116,6 @@ impl Hittable for Mesh {
             None => None
         }
     }
-
-    fn box_clone(&self) -> Box<dyn Hittable> {
-        Box::new(self.clone())
-    }
 }
 
 impl Mesh {
@@ -133,8 +123,8 @@ impl Mesh {
         parser::parse_obj(path, trans)
     }
 
-    pub fn generate_triangles(mesh: &Self) -> Vec<Triangle> {
-        let mut triangles: Vec<Triangle> = Vec::new();
+    pub fn generate_triangles(mesh: &Arc<Self>) -> Vec<Box<Triangle>> {
+        let mut triangles: Vec<Box<Triangle>> = Vec::new();
         for index in (0..mesh.ind.len()).step_by(3) {
             let v1 = mesh.p[mesh.ind[index]];
             let v2 = mesh.p[mesh.ind[index + 1]];
@@ -143,10 +133,10 @@ impl Mesh {
             let x_max = v1.x.max(v2.x.max(v3.x));
             let y_min = v1.y.min(v2.y.min(v3.y));
             let y_max = v1.y.max(v2.y.max(v3.y));
-            let z_min = v1.z.min(v2.y.min(v3.z));
-            let z_max = v1.z.max(v2.y.max(v3.z));
+            let z_min = v1.z.min(v2.z.min(v3.z));
+            let z_max = v1.z.max(v2.z.max(v3.z));
             let tri_box = BoundingBox::new(Point3::new(x_min, y_min, z_min), Point3::new(x_max, y_max, z_max));
-            let tri: Triangle = Triangle::new(index, &mesh, Some(tri_box));
+            let tri: Box<Triangle> = Box::new(Triangle::new(Arc::clone(mesh), index, Some(tri_box)));
             triangles.push(tri);
         }
         triangles
@@ -204,21 +194,16 @@ impl Mesh {
     }
 }
 
-pub struct Triangle <'b> {
-    id: usize,
-    mesh: &'b Mesh,
-    bounding_box: Option<BoundingBox>
+#[derive(Clone)]
+pub struct Triangle {
+    ind: usize,
+    mesh: Arc<Mesh>,
+    bounding_box: Option<BoundingBox>,
 }
 
-impl<'b> Clone for Triangle <'b> {
-    fn clone(&self) -> Self {
-        Self {id: self.id.clone(), bounding_box: self.bounding_box.clone(), mesh: self.mesh }
-    }
-}
-
-impl<'b> Hittable for Triangle<'b> {
+impl Hittable for Triangle {
     fn intersects(&self, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
-        self.mesh.intersects_triangle(ray, self.id, tmin, tmax)
+        self.mesh.intersects_triangle(ray, self.ind, tmin, tmax)
     }
 
     #[allow(unused_variables)]
@@ -230,14 +215,12 @@ impl<'b> Hittable for Triangle<'b> {
             None => None
         }
     }
-
-    fn box_clone(&self) -> Box<dyn Hittable> {
-        Box::new(self.clone())
-    }
 }
 
-impl<'b> Triangle<'b> {
-    pub fn new(id: usize, mesh: &'b Mesh, bounding_box: Option<BoundingBox>) -> Self { Self { id, mesh, bounding_box } }
+impl Triangle {
+    pub fn new(mesh: Arc<Mesh>, ind: usize, bounding_box: Option<BoundingBox>) -> Self {
+        Self { mesh, ind, bounding_box }
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -265,16 +248,17 @@ impl BoundingBox {
         };
         true
     }
+
     pub fn union(bbox1: &Self, bbox2: &Self) -> Self {
         let min: Point3<f64> = Point3::new(
             bbox1.min.x.min(bbox2.min.x),
-            bbox1.min.x.min(bbox2.min.y),
+            bbox1.min.y.min(bbox2.min.y),
             bbox1.min.z.min(bbox2.min.z)
         );
         let max: Point3<f64> = Point3::new(
-            bbox1.min.x.max(bbox2.max.x),
-            bbox1.min.x.max(bbox2.max.y),
-            bbox1.min.z.max(bbox2.max.z)
+            bbox1.max.x.max(bbox2.max.x),
+            bbox1.max.y.max(bbox2.max.y),
+            bbox1.max.z.max(bbox2.max.z)
         );
         Self::new(min, max)
     }
@@ -340,9 +324,8 @@ impl Hittable for MovingSphere {
     }
 }
 
-#[derive(Clone)]
 pub struct BvhNode {
-    bounding_box: BoundingBox,
+    pub bounding_box: BoundingBox,
     left: Box<dyn Hittable>,
     right: Box<dyn Hittable>,
 }
@@ -381,7 +364,7 @@ impl Hittable for BvhNode {
 }
 
 impl BvhNode {
-    pub fn new(objects: Vec<Box<dyn Hittable>>, start: usize, end: usize, t0: f64, t1: f64) -> Self {
+    pub fn new(objects: &mut Vec<Box<dyn Hittable>>, start: usize, end: usize, t0: f64, t1: f64) -> Self {
         let r = util::rand();
         let comp = if r < 1. / 3. {
             util::box_x_compare
@@ -391,35 +374,42 @@ impl BvhNode {
             util::box_z_compare
         };
         let num_obj = end - start;
-        let mut left: Box<dyn Hittable>;
-        let mut right: Box<dyn Hittable>;
+        let left: Box<dyn Hittable>;
+        let right: Box<dyn Hittable>;
         if num_obj == 1 {
-            left = objects[start];
-            right = objects[start];
+            left = objects.remove(0);
+            right = Box::new(Sphere::default()); // 'empty' object
         } else if num_obj == 2 {
-            if comp(&&objects[start], &&objects[start + 1]) != Ordering::Greater {
-                left = objects[start];
-                right = objects[start + 1];
+            if comp(&objects[start], &objects[start + 1]) != Ordering::Greater {
+                left = objects.remove(0);
+                right = objects.remove(0);
             } else {
-                left = objects[start + 1];
-                right = objects[start];
+                right = objects.remove(0);
+                left = objects.remove(0);
             }
         } else {
-            let mut slice: Vec<&Box<dyn Hittable>> = Vec::new();
-            for i in start..end {
-                slice.push(&objects[i]);
-            }
+            let slice = &mut objects[start..end];
             slice.sort_by(comp);
             let mid = start + num_obj / 2;
             let l = BvhNode::new(objects, start, mid, t0, t1);
-            let r = BvhNode::new(objects, mid, end, t0, t1);
+            let r = BvhNode::new(objects, start, end - mid, t0, t1);
             left = Box::new(l);
             right = Box::new(r);
         }
 
+        let left_box: Option<BoundingBox> = left.get_bounding_box(t0, t1);
+        let right_box: Option<BoundingBox> = right.get_bounding_box(t0, t1);
         
+        if left_box.is_none() || right_box.is_none() {
+            println!("Error: No bounding box in Bvh Node");
+            panic!();
+        }
 
-        Self { left, right, bounding_box: BoundingBox::new(Point3::origin(), Point3::origin()) }
+        let left_box = left_box.unwrap();
+        let right_box = right_box.unwrap();
+        let bounding_box = BoundingBox::union(&left_box, &right_box);
+
+        Self { left, right, bounding_box }
     }
 }
 
@@ -430,7 +420,7 @@ unsafe impl Send for Mesh {}
 unsafe impl Sync for Mesh {}
 unsafe impl Send for MovingSphere {}
 unsafe impl Sync for MovingSphere {}
-unsafe impl<'b> Send for Triangle<'b> {}
-unsafe impl<'b> Sync for Triangle<'b> {}
+unsafe impl Send for Triangle {}
+unsafe impl Sync for Triangle {}
 unsafe impl Send for BvhNode {}
 unsafe impl Sync for BvhNode {}
