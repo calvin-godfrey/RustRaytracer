@@ -4,6 +4,7 @@ use nalgebra::geometry::Point3;
 use crate::hittable::BvhNode;
 use crate::consts::*;
 use crate::util;
+use crate::materials::Material;
 
 #[derive(Copy, Clone)]
 pub struct Camera {
@@ -84,7 +85,7 @@ pub fn cast_ray(ray: &Ray, node: &BvhNode, depth: u32) -> Vector3<f64> {
     
     match hit_record {
         Some(record) => {
-            let pair: Option<(Ray, Vector3<f64>)> = record.mat.scatter(ray, &record);
+            let pair: Option<(Ray, Vector3<f64>)> = Material::scatter(ray, &record);
             match pair {
                 Some((x, y)) => {
                     let col = cast_ray(&x, node, depth - 1);

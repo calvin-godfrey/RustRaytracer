@@ -13,12 +13,12 @@ pub struct HitRecord {
     pub n: Unit<Vector3<f64>>, // normal of surface at point
     pub p: Point3<f64>, // point of intersection
     pub front: bool, // if the normal points outwards or not
-    pub mat: Arc<dyn Material>, // how the surface acts
+    pub mat: Arc<Material>, // how the surface acts
     pub uv: Option<Vector2<f64>>, // uv texture coordinates
 }
 
 impl HitRecord {
-    pub fn new(t: f64, n: Unit<Vector3<f64>>, p: Point3<f64>, front: bool, mat: Arc<dyn Material>) -> Self { Self { t, n, p, front, mat, uv: None } }
+    pub fn new(t: f64, n: Unit<Vector3<f64>>, p: Point3<f64>, front: bool, mat: Arc<Material>) -> Self { Self { t, n, p, front, mat, uv: None } }
     pub fn set_front(&mut self, ray: &Ray) {
         self.front = ray.dir.dot(self.n.as_ref()) < 0.0;
         self.n = if self.front { self.n } else { -self.n }
@@ -29,7 +29,7 @@ pub enum Primitive {
     Sphere {
         center: Point3<f64>,
         r: f64,
-        mat: Arc<dyn Material>,
+        mat: Arc<Material>,
         bounding_box: Option<BoundingBox>,
     },
     Triangle {
@@ -39,18 +39,17 @@ pub enum Primitive {
     },
     MovingSphere {
         r: f64,
-        mat: Arc<dyn Material>,
+        mat: Arc<Material>,
         t0: f64,
         t1: f64,
         c0: Point3<f64>,
         c1: Point3<f64>,
         bounding_box: Option<BoundingBox>,
-    },
-    Empty
+    }
 }
 
 impl Primitive {
-    pub fn new_sphere(center: Point3<f64>, r: f64, mat: Arc<dyn Material>) -> Self {
+    pub fn new_sphere(center: Point3<f64>, r: f64, mat: Arc<Material>) -> Self {
         let r_vec = Vector3::new(r, r, r);
         let min = center - r_vec;
         let max = center + r_vec;
@@ -64,7 +63,6 @@ impl Primitive {
             Primitive::Sphere { center, r, mat, bounding_box } => {sphere_intersect(center, r, mat, ray, tmin, tmax)}
             Primitive::Triangle { mesh, ind, bounding_box } => {mesh.intersects_triangle(ray, *ind, tmin, tmax)}
             Primitive::MovingSphere { r, mat, t0, t1, c0, c1, bounding_box } => {moving_sphere_intersect(*r, mat, *t0, *t1, c0, c1, ray, tmin, tmax)}
-            Primitive::Empty => {None}
         }
     }
 
@@ -78,16 +76,15 @@ impl Primitive {
             Primitive::MovingSphere { r, mat, t0, t1, c0, c1, bounding_box } => {
                 bounding_box
             }
-            Primitive::Empty => {&None}
         }
     }
 }
 
-pub fn make_sphere(center: Point3<f64>, r: f64, mat: Arc<dyn Material>) -> Primitive {
+pub fn make_sphere(center: Point3<f64>, r: f64, mat: Arc<Material>) -> Primitive {
     Primitive::new_sphere(center, r, mat)
 }
 
-pub fn make_moving_sphere(c0: Point3<f64>, c1: Point3<f64>, t0: f64, t1: f64, r: f64, mat: Arc<dyn Material>) -> Primitive {
+pub fn make_moving_sphere(c0: Point3<f64>, c1: Point3<f64>, t0: f64, t1: f64, r: f64, mat: Arc<Material>) -> Primitive {
     let c0 = moving_sphere_center(&c0, &c1, t0, t1, t0);
     let c1 = moving_sphere_center(&c0, &c1, t0, t1, t1);
     let min0 = Point3::new(c0.x - r, c0.y - r, c0.z - r);
@@ -100,7 +97,7 @@ pub fn make_moving_sphere(c0: Point3<f64>, c1: Point3<f64>, t0: f64, t1: f64, r:
     Primitive::MovingSphere { c0, c1, t0, t1, r, mat, bounding_box: Some(bounding_box) }
 }
 
-fn sphere_intersect(center: &Point3<f64>, r: &f64, mat: &Arc<dyn Material>, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
+fn sphere_intersect(center: &Point3<f64>, r: &f64, mat: &Arc<Material>, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
     let diff: Vector3<f64> = ray.origin - center;
         // get quadratic equation, calculate discriminant
         let a = ray.dir.dot(&ray.dir);
@@ -130,7 +127,7 @@ fn sphere_intersect(center: &Point3<f64>, r: &f64, mat: &Arc<dyn Material>, ray:
         }
 }
 
-fn moving_sphere_intersect(r: f64, mat: &Arc<dyn Material>, t0: f64, t1: f64, c0: &Point3<f64>, c1: &Point3<f64>, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
+fn moving_sphere_intersect(r: f64, mat: &Arc<Material>, t0: f64, t1: f64, c0: &Point3<f64>, c1: &Point3<f64>, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
     let center = moving_sphere_center(c0, c1, t0, t1, ray.time);
     let diff: Vector3<f64> = ray.origin - center;
     // get quadratic equation, calculate discriminant
@@ -174,22 +171,8 @@ pub struct Mesh {
     pub n: Vec<Vector3<f64>>,
     pub uv: Vec<Vector2<f64>>,
     pub bounding_box: Option<BoundingBox>,
-    pub mat: Arc<dyn Material>,
+    pub mat: Arc<Material>,
 }
-
-// impl Mesh {
-//     fn intersects(&self, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
-//         if let Some(bbox) = &self.bounding_box {
-//             if !bbox.intersects(ray, tmin, tmax) { return None; }
-//         }
-//         let records: Vec<HitRecord> = (0..self.ind.len()).step_by(3).filter_map(|ind| self.intersects_triangle(ray, ind, tmin, tmax)).collect();
-//         let rec = records.iter().min_by(|x, y| x.t.partial_cmp(&y.t).unwrap());
-//         match rec {
-//             Some(r) => return Some(r),
-//             None => return None
-//         }
-//     }
-// }
 
 impl Mesh {
     pub fn new(path: &str, trans: Matrix4<f64>) -> Self {
