@@ -21,7 +21,7 @@ use scenes::*;
 
 fn main() {
     let mut img = RgbImage::new(IMAGE_WIDTH, IMAGE_HEIGHT);
-    let (camera, node) = scenes::sphere_cat_bvh();
+    let (camera, node) = scenes::make_world();
 
     if SINGLE_THREAD {
         singlethread(&mut img, PATH, &node, &camera);

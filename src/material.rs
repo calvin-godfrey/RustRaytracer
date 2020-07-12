@@ -1,5 +1,6 @@
 pub mod materials {
     use nalgebra::base::{Unit, Vector3};
+    use nalgebra::geometry::{Point3};
     use crate::util::*;
     use std::sync::Arc;
     use crate::hittable::HitRecord;
@@ -9,7 +10,7 @@ pub mod materials {
     #[derive(Clone)]
     pub enum Material {
         Lambertian {
-            albedo: Vector3<f64>,
+            texture: Texture,
         },
         Metal {
             albedo: Vector3<f64>,
@@ -18,19 +19,15 @@ pub mod materials {
         Dielectric {
             index: f64,
         },
-        Texture {
-            img: Arc<RgbImage>,
-            albedo: Vector3<f64>,
-        }
     }
 
     impl Material {
         pub fn scatter(ray: &Ray, hit_record: &HitRecord) -> Option<(Ray, Vector3<f64>)> {
             match (*hit_record.mat).clone() {
-                Material::Lambertian { albedo } => {
+                Material::Lambertian { texture } => {
                     let dir: Vector3<f64> = hit_record.n.as_ref() + rand_in_hemisphere(hit_record.n.as_ref());
                     let ray = Ray::new_time(hit_record.p, dir, ray.time);
-                    let color = albedo;
+                    let color = Texture::value(&texture, hit_record.uv.x, hit_record.uv.y, &hit_record.p);
                     Some((ray, color))
                 }
                 Material::Metal { albedo, roughness } => {
@@ -51,33 +48,72 @@ pub mod materials {
                     let new_dir: Vector3<f64> = if etai * sint > 1. || rand() < prob { reflect(unit_dir.as_ref(), &hit_record.n) } else { refract(&unit_dir, &hit_record.n, etai) };
                     return Some((Ray::new_time(hit_record.p, new_dir, ray.time), Vector3::new(255., 255., 255.)));
                 }
-                Material::Texture { img, albedo } => {
-                    let dir: Vector3<f64> = hit_record.n.as_ref() + rand_in_hemisphere(hit_record.n.as_ref());
-                    let ray = Ray::new_time(hit_record.p, dir, ray.time);
-                    let color: Vector3<f64>;
+            }
+        }
+        pub fn new_lambertian(texture: Texture) -> Self { Material::Lambertian { texture } }
+        pub fn new_metal(albedo: Vector3<f64>, roughness: f64) -> Self { Material::Metal { albedo, roughness } }
+        pub fn new_dielectric(index: f64) -> Self { Material::Dielectric { index } }
 
-                    match hit_record.uv {
-                        Some(coords) => {
-                            let u: u32 = (coords.x * img.width() as f64).round() as u32;
-                            let v: u32 = ((1. - coords.y) * img.height() as f64).round() as u32;
-                            let from_image = img.get_pixel(u, v);
-                            let r: f64 = from_image[0] as f64;
-                            let g: f64 = from_image[1] as f64;
-                            let b: f64 = from_image[2] as f64;
-                            color = Vector3::new(r, g, b);
-                        }, // get color from texture
-                        None => color = albedo,
+    }
+
+    #[derive(Clone)]
+    pub enum Texture {
+        Image {
+            img: Arc<RgbImage>,
+        },
+        SolidColor {
+            color: Vector3<f64>,
+        },
+        Checkered {
+            odd: Box<Texture>,
+            even: Box<Texture>,
+            frequency: f64
+        }
+    }
+
+    impl Texture {
+
+        pub fn value(texture: &Texture, u: f64, v: f64, p: &Point3<f64>) -> Vector3<f64> {
+            match texture {
+                Texture::Image { img } => {
+                    Texture::image_value(img, u, v, p)
+                },
+                Texture::SolidColor { color } => { color.clone() },
+                Texture::Checkered { even, odd, frequency} => {
+                    let mult = (frequency * p.x).sin() * (frequency * p.y).sin() * (frequency * p.z).sin();
+                    if mult < 0. {
+                        Texture::value(even.as_ref(), u, v, p)
+                    } else {
+                        Texture::value(odd.as_ref(), u, v, p)
                     }
-                    Some((ray, color))
                 }
             }
         }
-        pub fn new_lambertian(albedo: Vector3<f64>) -> Self { Material::Lambertian { albedo } }
-        pub fn new_metal(albedo: Vector3<f64>, roughness: f64) -> Self { Material::Metal { albedo, roughness } }
-        pub fn new_dielectric(index: f64) -> Self { Material::Dielectric { index } }
-        pub fn new_texture(path: &str, albedo: Vector3<f64>) -> Self {
+
+        fn image_value(img: &Arc<RgbImage>, u: f64, v: f64, p: &Point3<f64>) -> Vector3<f64> {
+            let mut x: u32 = (u * img.width() as f64).round() as u32;
+            let mut y: u32 = ((1. - v) * img.height() as f64).round() as u32;
+            if y == img.height() {
+                y = y - 1;
+            }
+            if x == img.width() {
+                x = x - 1;
+            }
+            let from_image = img.get_pixel(x, y);
+            let r: f64 = from_image[0] as f64;
+            let g: f64 = from_image[1] as f64;
+            let b: f64 = from_image[2] as f64;
+            Vector3::new(r, g, b)
+        }
+
+        pub fn new_texture(path: &str) -> Self {
             let img: RgbImage = image::open(path).unwrap().to_rgb();
-            Material::Texture { img: Arc::new(img), albedo }
+            Texture::Image { img: Arc::new(img) }
+        }
+
+        pub fn new_solid_color(color: Vector3<f64>) -> Self { Texture::SolidColor { color } }
+        pub fn new_checkered(even: Box<Texture>, odd: Box<Texture>, frequency: f64) -> Self {
+            Texture::Checkered { even, odd, frequency }
         }
     }
 }

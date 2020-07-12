@@ -14,11 +14,11 @@ pub struct HitRecord {
     pub p: Point3<f64>, // point of intersection
     pub front: bool, // if the normal points outwards or not
     pub mat: Arc<Material>, // how the surface acts
-    pub uv: Option<Vector2<f64>>, // uv texture coordinates
+    pub uv: Vector2<f64>, // uv texture coordinates
 }
 
 impl HitRecord {
-    pub fn new(t: f64, n: Unit<Vector3<f64>>, p: Point3<f64>, front: bool, mat: Arc<Material>) -> Self { Self { t, n, p, front, mat, uv: None } }
+    pub fn new(t: f64, n: Unit<Vector3<f64>>, p: Point3<f64>, front: bool, mat: Arc<Material>) -> Self { Self { t, n, p, front, mat, uv: Vector2::new(0., 0.) } }
     pub fn set_front(&mut self, ray: &Ray) {
         self.front = ray.dir.dot(self.n.as_ref()) < 0.0;
         self.n = if self.front { self.n } else { -self.n }
@@ -109,22 +109,25 @@ fn sphere_intersect(center: &Point3<f64>, r: &f64, mat: &Arc<Material>, ray: &Ra
         }
         let inv_a = 1.0 / a;
         let root = disc.sqrt();
-        let ans = (-b - root) * inv_a; // try first solution to equation
+        let ans = (-b - root) * inv_a; // try first solution to equationd
+        let mut hit_record: HitRecord;
         if ans < tmax && ans > tmin {
             let hit = ray.at(ans);
-            let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, Arc::clone(&mat));
+            hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, Arc::clone(&mat));
             hit_record.set_front(ray);
-            return Some(hit_record);
-        }
-        let ans = (-b + root) * inv_a;
-        if ans < tmax && ans > tmin {
-            let hit = ray.at(ans);
-            let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, Arc::clone(&mat));
-            hit_record.set_front(ray);
-            return Some(hit_record);
         } else {
-            return None;
+            let ans = (-b + root) * inv_a;
+            if ans < tmax && ans > tmin {
+                let hit = ray.at(ans);
+                let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, Arc::clone(&mat));
+                hit_record.set_front(ray);
+                return Some(hit_record);
+            } else {
+                return None;
+            }
         }
+        util::get_sphere_uv((hit_record.p - center).scale(*r), &mut hit_record);
+        Some(hit_record)
 }
 
 fn moving_sphere_intersect(r: f64, mat: &Arc<Material>, t0: f64, t1: f64, c0: &Point3<f64>, c1: &Point3<f64>, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
@@ -234,13 +237,13 @@ impl Mesh {
         let normal = Unit::new_normalize(normal);
         let point = ray.at(t);
 
-        let uv: Option<Vector2<f64>> = if self.uv.len() == 0 {
-            None
+        let uv: Vector2<f64> = if self.uv.len() == 0 {
+            Vector2::new(0., 0.) // dummy value
         } else {
             let uv1 = ( 1. - u - v) * self.uv[ind1];
             let uv2 = u * self.uv[ind2];
             let uv3 = v * self.uv[ind3];
-            Some(uv1 + uv2 + uv3)
+            uv1 + uv2 + uv3
         };
 
         let mut record = HitRecord::new(t, normal, point, true, Arc::clone(&self.mat));

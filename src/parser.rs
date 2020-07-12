@@ -60,7 +60,7 @@ pub fn parse_obj(path: &str, trans: Matrix4<f64>) -> hittable::Mesh {
             if let Some(id) = mesh.material_id {
                 let mesh_mat: &tobj::Material = &mats[id];
                 let texture_path = &mesh_mat.ambient_texture[..];
-                let real_mat: materials::Material = materials::Material::new_texture(texture_path, Vector3::new(255., 0., 0.));
+                let real_mat: materials::Material = materials::Material::new_lambertian(materials::Texture::new_texture(texture_path));
 
                 let new_mesh = hittable::Mesh { ind, p, n, uv, mat: Arc::new(real_mat), bounding_box: bbox };
                 return new_mesh;

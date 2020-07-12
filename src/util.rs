@@ -1,6 +1,6 @@
 use image::{Rgb, RgbImage};
 use nalgebra::geometry::Point3;
-use nalgebra::base::{Unit, Vector3};
+use nalgebra::base::{Unit, Vector3, Vector2};
 use rand::prelude::*;
 use rand::distributions::Standard;
 use std::sync::{Mutex, Arc};
@@ -145,6 +145,14 @@ pub fn get_sky(ray: &geometry::Ray) -> Vector3<f64> {
     let unit: Unit<Vector3<f64>> = Unit::new_normalize(ray.dir);
     let color = gradient(&white, &blue, 0.5 * (1.0 + unit.as_ref().y));
     return Vector3::new(color[0] as f64, color[1] as f64, color[2] as f64);
+}
+
+pub fn get_sphere_uv(p: Vector3<f64>, record: &mut hittable::HitRecord) {
+    let phi = p.z.atan2(p.x);
+    let theta = p.y.asin();
+    let u = 1. - (phi + PI) / (2. * PI);
+    let v = (theta + PI / 2.) / PI;
+    record.uv = Vector2::new(u, v);
 }
 
 #[allow(dead_code)]
