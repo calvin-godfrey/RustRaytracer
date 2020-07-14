@@ -89,6 +89,9 @@ pub fn cast_ray(ray: &Ray, node: &BvhNode, depth: u32) -> Vector3<f64> {
             if Material::scatter(ray, &record).is_none() {
                 return emitted;
             }
+            if !record.front { // only front-facing objects
+                return if AMBIENT_LIGHT { util::get_sky(ray) } else { util::get_background(ray) }
+            }
             let pair: Option<(Ray, Vector3<f64>)> = Material::scatter(ray, &record);
             match pair {
                 Some((x, y)) => {

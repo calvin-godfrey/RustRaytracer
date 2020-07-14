@@ -141,3 +141,30 @@ pub fn basic_light() -> (geometry::Camera, BvhNode) {
     let node = BvhNode::new(&mut vec, 0, len, 0., 0.);
     (camera, node)
 }
+
+#[allow(dead_code)]
+pub fn cornell_box() -> (geometry::Camera, BvhNode) {
+
+    let from = Point3::new(278., 278., -800.);
+    let to = Point3::new(278., 278., 0.);
+    let up = Vector3::new(0., 1., 0.);
+
+    let camera = geometry::Camera::new_motion_blur(from, to, up, ASPECT_RATIO, 40., 0., 10., 0., 1.);
+
+    let mut vec: Vec<Box<Primitive>> = Vec::new();
+    let red   = Arc::new(Material::new_lambertian(Texture::new_solid_color(Vector3::new(165.75, 12.75, 12.75))));
+    let white = Arc::new(Material::new_lambertian(Texture::new_solid_color(Vector3::new(186.15, 186.15, 186.15))));
+    let green = Arc::new(Material::new_lambertian(Texture::new_solid_color(Vector3::new(30.6, 114.75, 38.25))));
+    let light = Arc::new(Material::new_diffuse(Texture::new_solid_color(Vector3::new(3825., 3825., 3825.))));
+
+    vec.push(Box::new(Primitive::new_flip_face(Box::new(Primitive::new_yz_rect(0., 0., 555., 555., 555., Arc::clone(&green))))));
+    vec.push(Box::new(Primitive::new_yz_rect(0., 0., 555., 555., 0., Arc::clone(&red))));
+    vec.push(Box::new(Primitive::new_xz_rect(213., 227., 343., 332., 554., Arc::clone(&light))));
+    vec.push(Box::new(Primitive::new_xz_rect(0., 0., 555., 555., 0., Arc::clone(&white))));
+    vec.push(Box::new(Primitive::new_flip_face(Box::new(Primitive::new_xz_rect(0., 0., 555., 555., 555., Arc::clone(&white))))));
+    vec.push(Box::new(Primitive::new_flip_face(Box::new(Primitive::new_xy_rect(0., 0., 555., 555., 555., Arc::clone(&white))))));
+    let len = vec.len();
+    
+    let node = BvhNode::new(&mut vec, 0, len, 0., 1.);
+    (camera, node)
+}

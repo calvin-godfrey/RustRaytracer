@@ -79,17 +79,17 @@ pub fn reflect(v: &Vector3<f64>, n: &Unit<Vector3<f64>>) -> Vector3<f64> {
 }
 
 pub fn increment_color(arr: &mut Vec<Vec<(f64, f64, f64, u32)>>, i: usize, j: usize, color: &Vector3<f64>) {
-    arr[i][j].0 += clamp(color.x, 0., 255.);
-    arr[i][j].1 += clamp(color.y, 0., 255.);
-    arr[i][j].2 += clamp(color.z, 0., 255.);
+    arr[i][j].0 += color.x;
+    arr[i][j].1 += color.y;
+    arr[i][j].2 += color.z;
     arr[i][j].3 += 1;
 }
 
 pub fn thread_safe_increment_color(arr: &Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>>, i: usize, j: usize, color: &Vector3<f64>) {
     let mut data = arr.lock().unwrap();
-    data[i][j].0 += clamp(color.x, 0., 255.);
-    data[i][j].1 += clamp(color.y, 0., 255.);
-    data[i][j].2 += clamp(color.z, 0., 255.);
+    data[i][j].0 += color.x;
+    data[i][j].1 += color.y;
+    data[i][j].2 += color.z;
     data[i][j].3 += 1;
 }
 
@@ -106,8 +106,8 @@ pub fn draw_picture(image: &mut RgbImage, pixels: &Vec<Vec<(f64, f64, f64, u32)>
         let w = i as usize;
         for j in 0..image.width() {
             let (r, g, b, n) = pixels[w][j as usize];
-            let pt = Point3::new(r / n as f64, g / n as f64, b / n as f64);
-            let color = point_to_color(&pt, 1. / GAMMA, 1);
+            let pt = Point3::new(r, g, b);
+            let color = point_to_color(&pt, 1. / GAMMA, n);
             image.put_pixel(j, i, color);
         }
     }
@@ -115,13 +115,13 @@ pub fn draw_picture(image: &mut RgbImage, pixels: &Vec<Vec<(f64, f64, f64, u32)>
 }
 
 fn point_to_color(vec: &Point3<f64>, gamma: f64, samples: u32) -> Rgb<u8> {
-    let scale: f64 = 1. / (255. * samples as f64);
-    let r: f64 = clamp(vec[0] * scale, 0., 255.);
-    let g: f64 = clamp(vec[1] * scale, 0., 255.);
-    let b: f64 = clamp(vec[2] * scale, 0., 255.);
-    Rgb([(r.powf(gamma) * 255.).round() as u8,
-         (g.powf(gamma) * 255.).round() as u8,
-         (b.powf(gamma) * 255.).round() as u8])
+    let scale: f64 = 1. / (samples as f64);
+    let r: f64 = clamp(vec[0] * scale, 0., 255.) * INV_COL_MAX;
+    let g: f64 = clamp(vec[1] * scale, 0., 255.) * INV_COL_MAX;
+    let b: f64 = clamp(vec[2] * scale, 0., 255.) * INV_COL_MAX;
+    Rgb([(r.powf(gamma) * 256.).round() as u8,
+         (g.powf(gamma) * 256.).round() as u8,
+         (b.powf(gamma) * 256.).round() as u8])
 
 }
 

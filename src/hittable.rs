@@ -55,6 +55,27 @@ pub enum Primitive {
         k: f64,
         mat: Arc<Material>,
         bounding_box: Option<BoundingBox>,
+    },
+    XZRect {
+        x0: f64,
+        z0: f64,
+        x1: f64,
+        z1: f64,
+        k: f64,
+        mat: Arc<Material>,
+        bounding_box: Option<BoundingBox>,
+    },
+    YZRect {
+        y0: f64,
+        z0: f64,
+        y1: f64,
+        z1: f64,
+        k: f64,
+        mat: Arc<Material>,
+        bounding_box: Option<BoundingBox>,
+    },
+    FlipFace {
+        obj: Box<Primitive>,
     }
 }
 
@@ -85,6 +106,20 @@ impl Primitive {
         Primitive::XYRect {x0, y0, x1, y1, k, mat, bounding_box }
     }
 
+    pub fn new_xz_rect(x0: f64, z0: f64, x1: f64, z1: f64, k: f64, mat: Arc<Material>) -> Primitive {
+        let bounding_box = Some(BoundingBox::new(Point3::new(x0, k - SMALL, z0), Point3::new(x1, k + SMALL, z1)));
+        Primitive::XZRect {x0, z0, x1, z1, k, mat, bounding_box }
+    }
+
+    pub fn new_yz_rect(y0: f64, z0: f64, y1: f64, z1: f64, k: f64, mat: Arc<Material>) -> Primitive {
+        let bounding_box = Some(BoundingBox::new(Point3::new(k - SMALL, y0, z0), Point3::new(k + SMALL, y1, z1)));
+        Primitive::YZRect {y0, z0, y1, z1, k, mat, bounding_box }
+    }
+
+    pub fn new_flip_face(obj: Box<Primitive>) -> Self {
+        Primitive::FlipFace { obj }
+    }
+
     #[allow(unused_variables)]
     pub fn intersects(obj: &Primitive, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
         match obj {
@@ -92,6 +127,19 @@ impl Primitive {
             Primitive::Triangle { mesh, ind, bounding_box } => {mesh.intersects_triangle(ray, *ind, tmin, tmax)}
             Primitive::MovingSphere { r, mat, t0, t1, c0, c1, bounding_box } => {moving_sphere_intersect(*r, mat, *t0, *t1, c0, c1, ray, tmin, tmax)}
             Primitive::XYRect { x0, y0, x1, y1, k, mat, bounding_box } => {xy_rect_intersect(*x0, *y0, *x1, *y1, *k, mat, ray, tmin, tmax)}
+            Primitive::XZRect { x0, z0, x1, z1, k, mat, bounding_box } => {xz_rect_intersect(*x0, *z0, *x1, *z1, *k, mat, ray, tmin, tmax)}
+            Primitive::YZRect { y0, z0, y1, z1, k, mat, bounding_box } => {yz_rect_intersect(*y0, *z0, *y1, *z1, *k, mat, ray, tmin, tmax)}
+            Primitive::FlipFace { obj } => {
+                let hit = Primitive::intersects(obj.as_ref(), ray, tmin, tmax);
+                // get the hitrecord of inner, then flip the front-ness
+                if hit.is_none() {
+                    None
+                } else {
+                    let mut record = hit.unwrap();
+                    record.front = !record.front;
+                    Some(record)
+                }
+            }
         }
     }
 
@@ -102,29 +150,13 @@ impl Primitive {
                 bounding_box
             }
             Primitive::Triangle { mesh, ind, bounding_box } => {bounding_box}
-            Primitive::MovingSphere { r, mat, t0, t1, c0, c1, bounding_box } => {
-                bounding_box
-            }
+            Primitive::MovingSphere { r, mat, t0, t1, c0, c1, bounding_box } => {bounding_box}
             Primitive::XYRect { x0, y0, x1, y1, k, mat, bounding_box } => {bounding_box}
+            Primitive::XZRect { x0, z0, x1, z1, k, mat, bounding_box } => {bounding_box}
+            Primitive::YZRect { y0, z0, y1, z1, k, mat, bounding_box } => {bounding_box}
+            Primitive::FlipFace { obj } => { Primitive::get_bounding_box(obj.as_ref(), time0, time1) }
         }
     }
-}
-
-fn xy_rect_intersect(x0: f64, y0: f64, x1: f64, y1: f64, k: f64, mat: &Arc<Material>, ray: &Ray, t0: f64, t1: f64) -> Option<HitRecord> {
-    let t = (k - ray.origin.z) / ray.dir.z;
-    if t < t0 || t > t1 {
-        return None;
-    }
-    let x = ray.origin.x + t * ray.dir.x;
-    let y = ray.origin.y + t * ray.dir.y;
-    if x < x0 || y < y0 || x > x1 || y > y1 {
-        return None;
-    }
-    let uv = Vector2::new((x-x0)/(x1-x0), (y-y0)/(y1-y0));
-    let mut record = HitRecord::new(t, Unit::new_normalize(Vector3::new(0., 0., 1.)), ray.at(t), true, Arc::clone(mat));
-    record.set_front(ray);
-    record.uv = uv;
-    Some(record)
 }
 
 fn sphere_intersect(center: &Point3<f64>, r: &f64, mat: &Arc<Material>, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
@@ -467,6 +499,57 @@ impl BvhNode {
 
         BvhNode::Internal {left: Box::new(inner_left), right: Box::new(inner_right), bounding_box: bb}
     }
+}
+
+fn xy_rect_intersect(x0: f64, y0: f64, x1: f64, y1: f64, k: f64, mat: &Arc<Material>, ray: &Ray, t0: f64, t1: f64) -> Option<HitRecord> {
+    let t = (k - ray.origin.z) / ray.dir.z;
+    if t < t0 || t > t1 {
+        return None;
+    }
+    let x = ray.origin.x + t * ray.dir.x;
+    let y = ray.origin.y + t * ray.dir.y;
+    if x < x0 || y < y0 || x > x1 || y > y1 {
+        return None;
+    }
+    let uv = Vector2::new((x-x0)/(x1-x0), (y-y0)/(y1-y0));
+    let mut record = HitRecord::new(t, Unit::new_normalize(Vector3::new(0., 0., 1.)), ray.at(t), true, Arc::clone(mat));
+    record.set_front(ray);
+    record.uv = uv;
+    Some(record)
+}
+
+fn xz_rect_intersect(x0: f64, z0: f64, x1: f64, z1: f64, k: f64, mat: &Arc<Material>, ray: &Ray, t0: f64, t1: f64) -> Option<HitRecord> {
+    let t = (k - ray.origin.y) / ray.dir.y;
+    if t < t0 || t > t1 {
+        return None;
+    }
+    let x = ray.origin.x + t * ray.dir.x;
+    let z = ray.origin.z + t * ray.dir.z;
+    if x < x0 || z < z0 || x > x1 || z > z1 {
+        return None;
+    }
+    let uv = Vector2::new((x-x0)/(x1-x0), (z-z0)/(z1-z0));
+    let mut record = HitRecord::new(t, Unit::new_normalize(Vector3::new(0., 1., 0.)), ray.at(t), true, Arc::clone(mat));
+    record.set_front(ray);
+    record.uv = uv;
+    Some(record)
+}
+
+fn yz_rect_intersect(y0: f64, z0: f64, y1: f64, z1: f64, k: f64, mat: &Arc<Material>, ray: &Ray, t0: f64, t1: f64) -> Option<HitRecord> {
+    let t = (k - ray.origin.x) / ray.dir.x;
+    if t < t0 || t > t1 {
+        return None;
+    }
+    let y = ray.origin.y + t * ray.dir.y;
+    let z = ray.origin.z + t * ray.dir.z;
+    if y < y0 || z < z0 || y > y1 || z > z1 {
+        return None;
+    }
+    let uv = Vector2::new((y-y0)/(y1-y0), (z-z0)/(z1-z0));
+    let mut record = HitRecord::new(t, Unit::new_normalize(Vector3::new(1., 0., 0.)), ray.at(t), true, Arc::clone(mat));
+    record.set_front(ray);
+    record.uv = uv;
+    Some(record)
 }
 
 // to please compiler. It's needed for multithreading even though these traits are never used

@@ -22,7 +22,7 @@ use scenes::*;
 
 fn main() {
     let mut img = RgbImage::new(IMAGE_WIDTH, IMAGE_HEIGHT);
-    let (camera, node) = scenes::make_world();
+    let (camera, node) = scenes::cornell_box();
 
     if SINGLE_THREAD {
         singlethread(&mut img, PATH, &node, &camera);
@@ -43,7 +43,7 @@ fn singlethread(img: &mut image::RgbImage, path: &str, node: &BvhNode, camera: &
         }
 
         for r in 0..TOTAL_RAYS {
-            if r % 100000 == 0 {
+            if r % 1000000 == 0 {
                 println!("Drawing ray {} of {}, {:.2}%", r, TOTAL_RAYS, (r as f64 * 100.) / (TOTAL_RAYS as f64));
             }
             if r % 1000000 == 0 {
