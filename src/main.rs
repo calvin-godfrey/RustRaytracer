@@ -11,6 +11,7 @@ mod hittable;
 mod geometry;
 mod parser;
 mod scenes;
+mod perlin;
 
 use consts::*;
 use material::materials;

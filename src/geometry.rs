@@ -85,15 +85,19 @@ pub fn cast_ray(ray: &Ray, node: &BvhNode, depth: u32) -> Vector3<f64> {
     
     match hit_record {
         Some(record) => {
+            let emitted = Material::emit(&record.mat, record.uv.x, record.uv.y, &record.p);
+            if Material::scatter(ray, &record).is_none() {
+                return emitted;
+            }
             let pair: Option<(Ray, Vector3<f64>)> = Material::scatter(ray, &record);
             match pair {
                 Some((x, y)) => {
                     let col = cast_ray(&x, node, depth - 1);
-                    return Vector3::new(col.x * y.x * INV_COL_MAX, col.y * y.y * INV_COL_MAX, col.z * y.z * INV_COL_MAX);
+                    return Vector3::new(col.x * y.x * INV_COL_MAX, col.y * y.y * INV_COL_MAX, col.z * y.z * INV_COL_MAX) + emitted;
                 },
-                None => Vector3::new(0.0, 0.0, 0.0)
+                None => Vector3::new(0.0, 0.0, 0.0) // should never happen
             }
         }
-        None => util::get_sky(ray)
+        None => if AMBIENT_LIGHT { util::get_sky(ray) } else { util::get_background(ray) }
     }    
 }

@@ -6,6 +6,7 @@ use crate::material::materials::Material;
 use crate::geometry::Ray;
 use crate::parser;
 use crate::util;
+use crate::consts::*;
 
 #[derive(Clone)]
 pub struct HitRecord {
@@ -45,6 +46,15 @@ pub enum Primitive {
         c0: Point3<f64>,
         c1: Point3<f64>,
         bounding_box: Option<BoundingBox>,
+    },
+    XYRect {
+        x0: f64,
+        y0: f64,
+        x1: f64,
+        y1: f64,
+        k: f64,
+        mat: Arc<Material>,
+        bounding_box: Option<BoundingBox>,
     }
 }
 
@@ -57,12 +67,31 @@ impl Primitive {
         Primitive::Sphere {center, r, mat, bounding_box }
     }
 
+    pub fn new_moving_sphere(c0: Point3<f64>, c1: Point3<f64>, t0: f64, t1: f64, r: f64, mat: Arc<Material>) -> Primitive {
+        let c0 = moving_sphere_center(&c0, &c1, t0, t1, t0);
+        let c1 = moving_sphere_center(&c0, &c1, t0, t1, t1);
+        let min0 = Point3::new(c0.x - r, c0.y - r, c0.z - r);
+        let max0 = Point3::new(c0.x + r, c0.y + r, c0.z + r);
+        let min1 = Point3::new(c1.x - r, c1.y - r, c1.z - r);
+        let max1 = Point3::new(c1.x + r, c1.y + r, c1.z + r);
+        let bbox1 = BoundingBox::new(min0, max0);
+        let bbox2 = BoundingBox::new(min1, max1);
+        let bounding_box = BoundingBox::union(&bbox1, &bbox2);
+        Primitive::MovingSphere { c0, c1, t0, t1, r, mat, bounding_box: Some(bounding_box) }
+    }
+
+    pub fn new_xy_rect(x0: f64, y0: f64, x1: f64, y1: f64, k: f64, mat: Arc<Material>) -> Primitive {
+        let bounding_box = Some(BoundingBox::new(Point3::new(x0, y0, k - SMALL), Point3::new(x1, y1, k + SMALL)));
+        Primitive::XYRect {x0, y0, x1, y1, k, mat, bounding_box }
+    }
+
     #[allow(unused_variables)]
     pub fn intersects(obj: &Primitive, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
         match obj {
             Primitive::Sphere { center, r, mat, bounding_box } => {sphere_intersect(center, r, mat, ray, tmin, tmax)}
             Primitive::Triangle { mesh, ind, bounding_box } => {mesh.intersects_triangle(ray, *ind, tmin, tmax)}
             Primitive::MovingSphere { r, mat, t0, t1, c0, c1, bounding_box } => {moving_sphere_intersect(*r, mat, *t0, *t1, c0, c1, ray, tmin, tmax)}
+            Primitive::XYRect { x0, y0, x1, y1, k, mat, bounding_box } => {xy_rect_intersect(*x0, *y0, *x1, *y1, *k, mat, ray, tmin, tmax)}
         }
     }
 
@@ -76,25 +105,26 @@ impl Primitive {
             Primitive::MovingSphere { r, mat, t0, t1, c0, c1, bounding_box } => {
                 bounding_box
             }
+            Primitive::XYRect { x0, y0, x1, y1, k, mat, bounding_box } => {bounding_box}
         }
     }
 }
 
-pub fn make_sphere(center: Point3<f64>, r: f64, mat: Arc<Material>) -> Primitive {
-    Primitive::new_sphere(center, r, mat)
-}
-
-pub fn make_moving_sphere(c0: Point3<f64>, c1: Point3<f64>, t0: f64, t1: f64, r: f64, mat: Arc<Material>) -> Primitive {
-    let c0 = moving_sphere_center(&c0, &c1, t0, t1, t0);
-    let c1 = moving_sphere_center(&c0, &c1, t0, t1, t1);
-    let min0 = Point3::new(c0.x - r, c0.y - r, c0.z - r);
-    let max0 = Point3::new(c0.x + r, c0.y + r, c0.z + r);
-    let min1 = Point3::new(c1.x - r, c1.y - r, c1.z - r);
-    let max1 = Point3::new(c1.x + r, c1.y + r, c1.z + r);
-    let bbox1 = BoundingBox::new(min0, max0);
-    let bbox2 = BoundingBox::new(min1, max1);
-    let bounding_box = BoundingBox::union(&bbox1, &bbox2);
-    Primitive::MovingSphere { c0, c1, t0, t1, r, mat, bounding_box: Some(bounding_box) }
+fn xy_rect_intersect(x0: f64, y0: f64, x1: f64, y1: f64, k: f64, mat: &Arc<Material>, ray: &Ray, t0: f64, t1: f64) -> Option<HitRecord> {
+    let t = (k - ray.origin.z) / ray.dir.z;
+    if t < t0 || t > t1 {
+        return None;
+    }
+    let x = ray.origin.x + t * ray.dir.x;
+    let y = ray.origin.y + t * ray.dir.y;
+    if x < x0 || y < y0 || x > x1 || y > y1 {
+        return None;
+    }
+    let uv = Vector2::new((x-x0)/(x1-x0), (y-y0)/(y1-y0));
+    let mut record = HitRecord::new(t, Unit::new_normalize(Vector3::new(0., 0., 1.)), ray.at(t), true, Arc::clone(mat));
+    record.set_front(ray);
+    record.uv = uv;
+    Some(record)
 }
 
 fn sphere_intersect(center: &Point3<f64>, r: &f64, mat: &Arc<Material>, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
@@ -126,7 +156,7 @@ fn sphere_intersect(center: &Point3<f64>, r: &f64, mat: &Arc<Material>, ray: &Ra
                 return None;
             }
         }
-        util::get_sphere_uv((hit_record.p - center).scale(*r), &mut hit_record);
+        util::get_sphere_uv((hit_record.p - center).scale( 1. / *r), &mut hit_record);
         Some(hit_record)
 }
 

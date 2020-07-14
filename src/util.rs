@@ -65,23 +65,31 @@ pub fn rand_in_disk() -> Vector3<f64> {
     }
 }
 
+pub fn rand_int(min: i32, max: i32) -> i32 {
+    rand_range(min as f64, max as f64).round() as i32
+}
+
+pub fn rand_vector(min: f64, max: f64) -> Vector3<f64> {
+    Vector3::new(rand_range(min, max), rand_range(min, max), rand_range(min, max))
+}
+
 pub fn reflect(v: &Vector3<f64>, n: &Unit<Vector3<f64>>) -> Vector3<f64> {
     let scale = 2. * v.dot(n);
     v - n.as_ref().scale(scale)
 }
 
 pub fn increment_color(arr: &mut Vec<Vec<(f64, f64, f64, u32)>>, i: usize, j: usize, color: &Vector3<f64>) {
-    arr[i][j].0 += color.x;
-    arr[i][j].1 += color.y;
-    arr[i][j].2 += color.z;
+    arr[i][j].0 += clamp(color.x, 0., 255.);
+    arr[i][j].1 += clamp(color.y, 0., 255.);
+    arr[i][j].2 += clamp(color.z, 0., 255.);
     arr[i][j].3 += 1;
 }
 
 pub fn thread_safe_increment_color(arr: &Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>>, i: usize, j: usize, color: &Vector3<f64>) {
     let mut data = arr.lock().unwrap();
-    data[i][j].0 += color.x;
-    data[i][j].1 += color.y;
-    data[i][j].2 += color.z;
+    data[i][j].0 += clamp(color.x, 0., 255.);
+    data[i][j].1 += clamp(color.y, 0., 255.);
+    data[i][j].2 += clamp(color.z, 0., 255.);
     data[i][j].3 += 1;
 }
 
@@ -108,9 +116,9 @@ pub fn draw_picture(image: &mut RgbImage, pixels: &Vec<Vec<(f64, f64, f64, u32)>
 
 fn point_to_color(vec: &Point3<f64>, gamma: f64, samples: u32) -> Rgb<u8> {
     let scale: f64 = 1. / (255. * samples as f64);
-    let r: f64 = vec[0] * scale;
-    let g: f64 = vec[1] * scale;
-    let b: f64 = vec[2] * scale;
+    let r: f64 = clamp(vec[0] * scale, 0., 255.);
+    let g: f64 = clamp(vec[1] * scale, 0., 255.);
+    let b: f64 = clamp(vec[2] * scale, 0., 255.);
     Rgb([(r.powf(gamma) * 255.).round() as u8,
          (g.powf(gamma) * 255.).round() as u8,
          (b.powf(gamma) * 255.).round() as u8])
@@ -139,13 +147,16 @@ pub fn thread_safe_draw_picture(img: &Mutex<image::RgbImage>, pixels: &Mutex<Vec
     img_guard.save(path).unwrap();
 }
 
+#[allow(dead_code)]
 pub fn get_sky(ray: &geometry::Ray) -> Vector3<f64> {
     let white = Rgb([255u8, 255u8, 255u8]);
-    let blue = Rgb([50u8, 129u8, 255u8]);
+    let blue = Rgb([80u8, 159u8, 255u8]);
     let unit: Unit<Vector3<f64>> = Unit::new_normalize(ray.dir);
     let color = gradient(&white, &blue, 0.5 * (1.0 + unit.as_ref().y));
     return Vector3::new(color[0] as f64, color[1] as f64, color[2] as f64);
 }
+
+pub fn get_background(_ray: &geometry::Ray) -> Vector3<f64> {Vector3::new(0., 0., 0.)}
 
 pub fn get_sphere_uv(p: Vector3<f64>, record: &mut hittable::HitRecord) {
     let phi = p.z.atan2(p.x);
