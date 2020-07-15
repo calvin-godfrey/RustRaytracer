@@ -1,12 +1,12 @@
 use tobj;
-use nalgebra::geometry::{Point3};
-use nalgebra::base::{Vector2, Vector3, Matrix4};
+use nalgebra::geometry::{Projective3, Point3};
+use nalgebra::base::{Vector2, Vector3};
 use std::sync::Arc;
 use crate::hittable;
 use crate::materials;
 use crate::consts::*;
 
-pub fn parse_obj(path: &str, trans: Matrix4<f64>) -> hittable::Mesh {
+pub fn parse_obj(path: &str, trans: Projective3<f64>) -> hittable::Mesh {
     let obj_res: Result<(Vec<tobj::Model>, Vec<tobj::Material>), tobj::LoadError> = tobj::load_obj(path, true);
     let mut ind: Vec<usize> = Vec::new();
     let mut p: Vec<Point3<f64>> = Vec::new();

@@ -12,6 +12,8 @@ mod geometry;
 mod parser;
 mod scenes;
 mod perlin;
+mod primitive;
+mod intersects;
 
 use consts::*;
 use material::materials;
@@ -73,7 +75,7 @@ fn singlethread(img: &mut image::RgbImage, path: &str, node: &BvhNode, camera: &
                 }
                 util::draw_color(img, i, j, &color, SAMPLES_PER_PIXEL);
             }
-            if i % 100 == 0 {
+            if i % 50 == 0 {
                 img.save(path).unwrap();
             }
         }

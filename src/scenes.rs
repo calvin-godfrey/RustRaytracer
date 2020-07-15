@@ -1,11 +1,12 @@
 use nalgebra::base::{Matrix4, Vector3};
-use nalgebra::geometry::{Point3, Rotation3};
+use nalgebra::geometry::{Point3, Rotation3, Projective3};
 use std::sync::Arc;
 use crate::hittable::*;
 use crate::consts::*;
 use crate::material::materials::{Texture, Material};
 use crate::util;
 use crate::geometry;
+use crate::primitive::Primitive;
 
 #[allow(dead_code)]
 pub fn make_world() -> (geometry::Camera, BvhNode) {
@@ -102,7 +103,7 @@ pub fn sphere_cat_bvh() -> (geometry::Camera, BvhNode) {
     let rot: Matrix4<f64> = Rotation3::from_euler_angles(-PI / 2., 0., 0.).to_homogeneous();
     let transform = transform * rot;
 
-    let mesh = Mesh::new("data/cat/cat.obj", transform);
+    let mesh = Mesh::new("data/cat/cat.obj", Projective3::from_matrix_unchecked(transform));
     let arc_mesh = Arc::new(mesh);
     let triangles = Mesh::generate_triangles(&arc_mesh);
     let sphere = Primitive::new_sphere(Point3::new(70., -20., 10.), 50., Arc::new(Material::new_metal(Vector3::new(178.5, 153., 127.5), 0.)));
@@ -159,10 +160,26 @@ pub fn cornell_box() -> (geometry::Camera, BvhNode) {
 
     vec.push(Box::new(Primitive::new_flip_face(Box::new(Primitive::new_yz_rect(0., 0., 555., 555., 555., Arc::clone(&green))))));
     vec.push(Box::new(Primitive::new_yz_rect(0., 0., 555., 555., 0., Arc::clone(&red))));
-    vec.push(Box::new(Primitive::new_xz_rect(213., 227., 343., 332., 554., Arc::clone(&light))));
+    vec.push(Box::new(Primitive::new_xz_rect(213., 227., 343., 332., 554.9, Arc::clone(&light))));
     vec.push(Box::new(Primitive::new_xz_rect(0., 0., 555., 555., 0., Arc::clone(&white))));
     vec.push(Box::new(Primitive::new_flip_face(Box::new(Primitive::new_xz_rect(0., 0., 555., 555., 555., Arc::clone(&white))))));
     vec.push(Box::new(Primitive::new_flip_face(Box::new(Primitive::new_xy_rect(0., 0., 555., 555., 555., Arc::clone(&white))))));
+    
+
+    let first_translate = Projective3::from_matrix_unchecked(Matrix4::identity().append_translation(&Vector3::new(265., 0., 295.)));
+    let second_translate = Projective3::from_matrix_unchecked(Matrix4::identity().append_translation(&Vector3::new(130., 0., 65.)));
+
+    let r1 = Rotation3::from_euler_angles(0., 15. * PI / 180., 0.);
+    let r2 = Rotation3::from_euler_angles(0., -18. * PI / 180., 0.);
+
+    let first_transform = first_translate * r1;
+    let second_transform = second_translate * r2;
+
+    let cube1 = Cube::new_transform(Vector3::new(0., 0., 0.), Vector3::new(165., 165., 165.), Arc::clone(&white), Arc::new(second_transform));
+    vec.extend(cube1.get_sides());
+    let cube2 = Cube::new_transform(Vector3::new(0., 0., 0.), Vector3::new(165., 330., 165.), Arc::clone(&white), Arc::new(first_transform));
+    vec.extend(cube2.get_sides());
+    
     let len = vec.len();
     
     let node = BvhNode::new(&mut vec, 0, len, 0., 1.);

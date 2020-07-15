@@ -29,7 +29,7 @@ pub mod materials {
         pub fn scatter(ray: &Ray, hit_record: &HitRecord) -> Option<(Ray, Vector3<f64>)> {
             match (*hit_record.mat).clone() {
                 Material::Lambertian { texture } => {
-                    let dir: Vector3<f64> = hit_record.n.as_ref() + rand_in_hemisphere(hit_record.n.as_ref());
+                    let dir: Vector3<f64> = hit_record.n.as_ref() + rand_in_unit_sphere(); //hit_record.n.as_ref());
                     let ray = Ray::new_time(hit_record.p, dir, ray.time);
                     let color = Texture::value(&texture, hit_record.uv.x, hit_record.uv.y, &hit_record.p);
                     Some((ray, color))

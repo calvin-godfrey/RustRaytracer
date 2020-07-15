@@ -1,5 +1,5 @@
 use image::{Rgb, RgbImage};
-use nalgebra::geometry::Point3;
+use nalgebra::geometry::{Projective3, Point3};
 use nalgebra::base::{Unit, Vector3, Vector2};
 use rand::prelude::*;
 use rand::distributions::Standard;
@@ -8,6 +8,7 @@ use std::sync::{Mutex, Arc};
 use crate::consts::*;
 use crate::geometry;
 use crate::hittable;
+use crate::primitive::Primitive;
 
 pub fn gradient(from: &Rgb<u8>, to: &Rgb<u8>, scale: f64) -> Rgb<u8> {
     let r: u8 = ((1.0 - scale) * from[0] as f64 + (scale * (to[0] as f64))) as u8;
@@ -46,6 +47,7 @@ pub fn rand_in_unit_sphere() -> Vector3<f64> {
     return Vector3::new(r * a.cos(), r * a.sin(), z);
 }
 
+#[allow(dead_code)]
 pub fn rand_in_hemisphere(normal: &Vector3<f64>) -> Vector3<f64> {
     let vec: Vector3<f64> = rand_in_unit_sphere();
     if normal.dot(&vec) > 0. {
@@ -166,10 +168,33 @@ pub fn get_sphere_uv(p: Vector3<f64>, record: &mut hittable::HitRecord) {
     record.uv = Vector2::new(u, v);
 }
 
+pub fn get_new_box(bbox: hittable::BoundingBox, t: &Arc<Projective3<f64>>) -> hittable::BoundingBox {
+    let mut min: Point3<f64> = Point3::new(INFINITY, INFINITY, INFINITY);
+    let mut max: Point3<f64> = Point3::new(-INFINITY, -INFINITY,  -INFINITY);
+    for i in 0..2 {
+        for j in 0..2 {
+            for k in 0..2 {
+                let x = if i == 0 { bbox.min.x } else { bbox.max.x };
+                let y = if j == 0 { bbox.min.y } else { bbox.max.y };
+                let z = if k == 0 { bbox.min.z } else { bbox.max.z };
+                let p = Point3::new(x, y , z);
+                let np = t.transform_point(&p);
+                min.x = min.x.min(np.x);
+                min.y = min.y.min(np.y);
+                min.z = min.z.min(np.z);
+                max.x = max.x.max(np.x);
+                max.y = max.y.max(np.y);
+                max.z = max.z.max(np.z);
+            }
+        }
+    }
+    hittable::BoundingBox::new(min, max)
+}
+
 #[allow(dead_code)]
-fn box_compare(a: &Box<hittable::Primitive>, b: &Box<hittable::Primitive>, axis: usize) -> std::cmp::Ordering {
-    let box_a = hittable::Primitive::get_bounding_box(a.as_ref(), 0., 0.);
-    let box_b = hittable::Primitive::get_bounding_box(b.as_ref(), 0., 0.);
+fn box_compare(a: &Box<Primitive>, b: &Box<Primitive>, axis: usize) -> std::cmp::Ordering {
+    let box_a = Primitive::get_bounding_box(a.as_ref(), 0., 0.);
+    let box_b = Primitive::get_bounding_box(b.as_ref(), 0., 0.);
     if box_a.is_none() || box_b.is_none() {
         println!("Error, cannot compare objects");
         return std::cmp::Ordering::Equal;
@@ -188,8 +213,8 @@ fn box_compare(a: &Box<hittable::Primitive>, b: &Box<hittable::Primitive>, axis:
 }
 
 #[allow(dead_code)]
-pub fn box_x_compare(a: &Box<hittable::Primitive>, b: &Box<hittable::Primitive>) -> std::cmp::Ordering { box_compare(a, b, 0) }
+pub fn box_x_compare(a: &Box<Primitive>, b: &Box<Primitive>) -> std::cmp::Ordering { box_compare(a, b, 0) }
 #[allow(dead_code)]
-pub fn box_y_compare(a: &Box<hittable::Primitive>, b: &Box<hittable::Primitive>) -> std::cmp::Ordering { box_compare(a, b, 1) }
+pub fn box_y_compare(a: &Box<Primitive>, b: &Box<Primitive>) -> std::cmp::Ordering { box_compare(a, b, 1) }
 #[allow(dead_code)]
-pub fn box_z_compare(a: &Box<hittable::Primitive>, b: &Box<hittable::Primitive>) -> std::cmp::Ordering { box_compare(a, b, 2) }
+pub fn box_z_compare(a: &Box<Primitive>, b: &Box<Primitive>) -> std::cmp::Ordering { box_compare(a, b, 2) }

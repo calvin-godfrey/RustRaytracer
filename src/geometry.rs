@@ -1,5 +1,6 @@
 use nalgebra::base::{Unit, Vector3, Matrix};
-use nalgebra::geometry::Point3;
+use nalgebra::geometry::{Projective3, Point3};
+use std::sync::Arc;
 
 use crate::hittable::BvhNode;
 use crate::consts::*;
@@ -61,6 +62,7 @@ impl Camera {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct Ray {
     pub origin: Point3<f64>,
     pub dir: Vector3<f64>,
@@ -74,6 +76,12 @@ impl Ray {
 
     pub fn at(&self, t: f64) -> Point3<f64> {
         self.origin + self.dir.scale(t)
+    }
+
+    pub fn transform(&self, trans: &Arc<Projective3<f64>>) -> Self {
+        let new_dir = trans.inverse_transform_vector(&self.dir);
+        let new_origin = trans.inverse_transform_point(&self.origin);
+        Ray::new_time(new_origin, new_dir, self.time)
     }
 }
 
