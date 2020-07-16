@@ -16,24 +16,25 @@ mod primitive;
 mod intersects;
 
 use consts::*;
-use material::materials;
+use material::materials::{Material, Texture};
 use hittable::BvhNode;
 use geometry::Camera;
+use primitive::Primitive;
 #[allow(unused_imports)]
 use scenes::*;
 
 fn main() {
     let mut img = RgbImage::new(IMAGE_WIDTH, IMAGE_HEIGHT);
-    let (camera, node) = scenes::cornell_box();
+    let (camera, node, objs, materials, textures) = scenes::make_world();
 
     if SINGLE_THREAD {
-        singlethread(&mut img, PATH, &node, &camera);
+        singlethread(&mut img, PATH, &node, &camera, &objs, &materials, &textures);
     } else {
-        multithread(img, node, camera);
+        multithread(img, node, camera, objs, materials, textures);
     }
 }
 
-fn singlethread(img: &mut image::RgbImage, path: &str, node: &BvhNode, camera: &Camera) {
+fn singlethread(img: &mut image::RgbImage, path: &str, node: &BvhNode, camera: &Camera, objs: &Vec<Primitive>, materials: &Vec<Material>, textures: &Vec<Texture>) {
     if !COLS {
         let mut pixels: Vec<Vec<(f64, f64, f64, u32)>> = Vec::new();
         for _ in 0..IMAGE_HEIGHT {
@@ -55,7 +56,7 @@ fn singlethread(img: &mut image::RgbImage, path: &str, node: &BvhNode, camera: &
             let u: f64 = util::rand();
             let v: f64 = util::rand();
             let ray = camera.get_ray(u, v);
-            let res = geometry::cast_ray(&ray, &node, MAX_DEPTH);
+            let res = geometry::cast_ray(objs, materials, textures, &ray, &node, MAX_DEPTH);
             let i = (u * IMAGE_WIDTH as f64).floor() as usize;
             let j = (v * IMAGE_HEIGHT as f64).floor() as usize;
             util::increment_color(&mut pixels, j, i, &res);
@@ -70,7 +71,7 @@ fn singlethread(img: &mut image::RgbImage, path: &str, node: &BvhNode, camera: &
                     let u: f64 = (i as f64 + util::rand()) / ((IMAGE_WIDTH - 1) as f64);
                     let v: f64 = (j as f64 + util::rand()) / ((IMAGE_HEIGHT - 1) as f64);
                     let ray = camera.get_ray(u, v);
-                    let res: Vector3<f64> = geometry::cast_ray(&ray, &node, MAX_DEPTH);
+                    let res: Vector3<f64> = geometry::cast_ray(objs, materials, textures, &ray, &node, MAX_DEPTH);
                     color = color + res;
                 }
                 util::draw_color(img, i, j, &color, SAMPLES_PER_PIXEL);
@@ -83,7 +84,7 @@ fn singlethread(img: &mut image::RgbImage, path: &str, node: &BvhNode, camera: &
     img.save(path).unwrap();
 }
 
-fn multithread (img: image::RgbImage, node: BvhNode, camera: Camera) {
+fn multithread (img: image::RgbImage, node: BvhNode, camera: Camera, objs: Vec<Primitive>, materials: Vec<Material>, textures: Vec<Texture>) {
     let mut pixels: Vec<Vec<(f64, f64, f64, u32)>> = Vec::new();
     for _ in 0..IMAGE_HEIGHT {
         let mut temp: Vec<(f64, f64, f64, u32)> = Vec::new();
@@ -93,21 +94,6 @@ fn multithread (img: image::RgbImage, node: BvhNode, camera: Camera) {
         pixels.push(temp);
     }
 
-    // first, make a single-threated pass through so that every pixel has data
-    // for i in 0u32..IMAGE_WIDTH {
-    //     if i % 100 == 0 {
-    //         println!("Drawing {} of {}", i, IMAGE_WIDTH);
-    //     }
-    //     for j in 0u32..IMAGE_HEIGHT {
-    //         let u: f64 = (i as f64 + util::rand()) / ((IMAGE_WIDTH - 1) as f64);
-    //         let v: f64 = (j as f64 + util::rand()) / ((IMAGE_HEIGHT - 1) as f64);
-    //         let ray = camera.get_ray(u, v);
-    //         let res: Vector3<f64> = geometry::cast_ray(&ray, &vec, MAX_DEPTH);
-    //         util::increment_color(&mut pixels, j as usize, i as usize, &res);
-    //     }
-    // }
-
-    // println!("Finished with first pass");
 
     let pixels_mutex: Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>> = Arc::new(Mutex::new(pixels));
     let node_arc: Arc<BvhNode> = Arc::new(node);
@@ -115,12 +101,18 @@ fn multithread (img: image::RgbImage, node: BvhNode, camera: Camera) {
     let image_arc: Arc<Mutex<image::RgbImage>> = Arc::new(Mutex::new(img));
 
     let mut thread_vec: Vec<thread::JoinHandle<()>> = Vec::new();
+    let objs_arc: Arc<Vec<Primitive>> = Arc::new(objs);
+    let mats_arc: Arc<Vec<Material>> = Arc::new(materials);
+    let texture_arc : Arc<Vec<Texture>> = Arc::new(textures);
 
     for thread_num in 0..NUM_THREADS {
         let camera_clone = camera.clone();
         let node_clone = Arc::clone(&node_arc);
         let pixels_clone = Arc::clone(&pixels_mutex);
         let image_clone = Arc::clone(&image_arc);
+        let objs_clone= Arc::clone(&objs_arc);
+        let mats_clone = Arc::clone(&mats_arc);
+        let textures_clone = Arc::clone(&texture_arc);
 
         thread_vec.push(thread::spawn(move || {
             for r in 0..RAYS_PER_THREAD {
@@ -133,7 +125,7 @@ fn multithread (img: image::RgbImage, node: BvhNode, camera: Camera) {
                 let u: f64 = util::rand();
                 let v: f64 = util::rand();
                 let ray = camera_clone.get_ray(u, v);
-                let res = geometry::cast_ray(&ray, &node_clone, MAX_DEPTH);
+                let res = geometry::cast_ray(&objs_clone, &mats_clone, &textures_clone, &ray, &node_clone, MAX_DEPTH);
                 let i = (u * IMAGE_WIDTH as f64).floor() as usize;
                 let j = (v * IMAGE_HEIGHT as f64).floor() as usize;
                 util::thread_safe_increment_color(&pixels_clone, j, i, &res);

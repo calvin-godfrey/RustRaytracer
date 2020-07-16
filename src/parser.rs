@@ -1,12 +1,11 @@
 use tobj;
 use nalgebra::geometry::{Projective3, Point3};
 use nalgebra::base::{Vector2, Vector3};
-use std::sync::Arc;
 use crate::hittable;
-use crate::materials;
+use crate::material::materials::{Texture, Material};
 use crate::consts::*;
 
-pub fn parse_obj(path: &str, trans: Projective3<f64>) -> hittable::Mesh {
+pub fn parse_obj(materials: &mut Vec<Material>, textures: &mut Vec<Texture>, path: &str, trans: Projective3<f64>) -> hittable::Mesh {
     let obj_res: Result<(Vec<tobj::Model>, Vec<tobj::Material>), tobj::LoadError> = tobj::load_obj(path, true);
     let mut ind: Vec<usize> = Vec::new();
     let mut p: Vec<Point3<f64>> = Vec::new();
@@ -60,9 +59,11 @@ pub fn parse_obj(path: &str, trans: Projective3<f64>) -> hittable::Mesh {
             if let Some(id) = mesh.material_id {
                 let mesh_mat: &tobj::Material = &mats[id];
                 let texture_path = &mesh_mat.ambient_texture[..];
-                let real_mat: materials::Material = materials::Material::new_lambertian(materials::Texture::new_texture(texture_path));
+                textures.push(Texture::new_texture(texture_path));
+                let real_mat: Material = Material::new_lambertian(textures.len() - 1);
+                materials.push(real_mat);
 
-                let new_mesh = hittable::Mesh { ind, p, n, uv, mat: Arc::new(real_mat), bounding_box: bbox };
+                let new_mesh = hittable::Mesh { ind, p, n, uv, mat_index: materials.len() - 1, bounding_box: bbox };
                 return new_mesh;
             }
         },
@@ -72,5 +73,5 @@ pub fn parse_obj(path: &str, trans: Projective3<f64>) -> hittable::Mesh {
     }
 
     // random default, doesn't matter what it is
-    hittable::Mesh { ind: Vec::new(), p: Vec::new(), n: Vec::new(), uv: Vec::new(), mat: Arc::new(materials::Material::new_dielectric(1.)), bounding_box: None }
+    hittable::Mesh { ind: Vec::new(), p: Vec::new(), n: Vec::new(), uv: Vec::new(), mat_index: 0, bounding_box: None }
 }

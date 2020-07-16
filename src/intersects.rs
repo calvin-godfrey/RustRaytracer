@@ -1,14 +1,13 @@
 use nalgebra::base::{Vector3, Vector2, Unit};
 use nalgebra::geometry::{Projective3, Point3};
 use std::sync::Arc;
-use crate::materials::Material;
 use crate::geometry::Ray;
 use crate::hittable::HitRecord;
 use crate::util;
 use crate::primitive::moving_sphere_center;
 
 #[allow(unused_variables)]
-pub fn xy_rect_intersect(x0: f64, y0: f64, x1: f64, y1: f64, k: f64, mat: &Arc<Material>, transform: &Option<Arc<Projective3<f64>>>, ray: &Ray, t0: f64, t1: f64) -> Option<HitRecord> {
+pub fn xy_rect_intersect(x0: f64, y0: f64, x1: f64, y1: f64, k: f64, mat_index: usize, transform: &Option<Arc<Projective3<f64>>>, ray: &Ray, t0: f64, t1: f64) -> Option<HitRecord> {
     let transformed_ray: Ray = if transform.is_none() { *ray } else { ray.transform(transform.as_ref().unwrap()) };
     let dir = transformed_ray.dir;
     let origin = transformed_ray.origin;
@@ -29,14 +28,14 @@ pub fn xy_rect_intersect(x0: f64, y0: f64, x1: f64, y1: f64, k: f64, mat: &Arc<M
         n = transform.as_ref().unwrap().transform_vector(&n);
         p = transform.as_ref().unwrap().transform_point(&p);
     }
-    let mut record = HitRecord::new(t, Unit::new_normalize(n), p, true, Arc::clone(mat));
+    let mut record = HitRecord::new(t, Unit::new_normalize(n), p, true, mat_index);
     record.set_front(&transformed_ray);
     record.uv = uv;
     Some(record)
 }
 
 #[allow(unused_variables)]
-pub fn xz_rect_intersect(x0: f64, z0: f64, x1: f64, z1: f64, k: f64, mat: &Arc<Material>, transform: &Option<Arc<Projective3<f64>>>, ray: &Ray, t0: f64, t1: f64) -> Option<HitRecord> {
+pub fn xz_rect_intersect(x0: f64, z0: f64, x1: f64, z1: f64, k: f64, mat_index: usize, transform: &Option<Arc<Projective3<f64>>>, ray: &Ray, t0: f64, t1: f64) -> Option<HitRecord> {
     let transformed_ray: Ray = if transform.is_none() { *ray } else { ray.transform(transform.as_ref().unwrap()) };
     let dir = transformed_ray.dir;
     let origin = transformed_ray.origin;
@@ -57,14 +56,14 @@ pub fn xz_rect_intersect(x0: f64, z0: f64, x1: f64, z1: f64, k: f64, mat: &Arc<M
         n = transform.as_ref().unwrap().transform_vector(&n);
         p = transform.as_ref().unwrap().transform_point(&p);
     }
-    let mut record = HitRecord::new(t, Unit::new_normalize(n), p, true, Arc::clone(mat));
+    let mut record = HitRecord::new(t, Unit::new_normalize(n), p, true, mat_index);
     record.set_front(&transformed_ray);
     record.uv = uv;
     Some(record)
 }
 
 #[allow(unused_variables)]
-pub fn yz_rect_intersect(y0: f64, z0: f64, y1: f64, z1: f64, k: f64, mat: &Arc<Material>, transform: &Option<Arc<Projective3<f64>>>, ray: &Ray, t0: f64, t1: f64) -> Option<HitRecord> {
+pub fn yz_rect_intersect(y0: f64, z0: f64, y1: f64, z1: f64, k: f64, mat_index: usize, transform: &Option<Arc<Projective3<f64>>>, ray: &Ray, t0: f64, t1: f64) -> Option<HitRecord> {
     let transformed_ray: Ray = if transform.is_none() { *ray } else { ray.transform(transform.as_ref().unwrap()) };
     let dir = transformed_ray.dir;
     let origin = transformed_ray.origin;
@@ -85,13 +84,13 @@ pub fn yz_rect_intersect(y0: f64, z0: f64, y1: f64, z1: f64, k: f64, mat: &Arc<M
         n = transform.as_ref().unwrap().transform_vector(&n);
         p = transform.as_ref().unwrap().transform_point(&p);
     }
-    let mut record = HitRecord::new(t, Unit::new_normalize(n), p, true, Arc::clone(mat));
+    let mut record = HitRecord::new(t, Unit::new_normalize(n), p, true, mat_index);
     record.set_front(&transformed_ray);
     record.uv = uv;
     Some(record)
 }
 
-pub fn sphere_intersect(center: &Point3<f64>, r: &f64, mat: &Arc<Material>, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
+pub fn sphere_intersect(center: &Point3<f64>, r: &f64, mat_index: usize, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
     let diff: Vector3<f64> = ray.origin - center;
         // get quadratic equation, calculate discriminant
         let a = ray.dir.dot(&ray.dir);
@@ -107,13 +106,13 @@ pub fn sphere_intersect(center: &Point3<f64>, r: &f64, mat: &Arc<Material>, ray:
         let mut hit_record: HitRecord;
         if ans < tmax && ans > tmin {
             let hit = ray.at(ans);
-            hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, Arc::clone(&mat));
+            hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, mat_index);
             hit_record.set_front(ray);
         } else {
             let ans = (-b + root) * inv_a;
             if ans < tmax && ans > tmin {
                 let hit = ray.at(ans);
-                let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, Arc::clone(&mat));
+                let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, mat_index);
                 hit_record.set_front(ray);
                 return Some(hit_record);
             } else {
@@ -124,7 +123,7 @@ pub fn sphere_intersect(center: &Point3<f64>, r: &f64, mat: &Arc<Material>, ray:
         Some(hit_record)
 }
 
-pub fn moving_sphere_intersect(r: f64, mat: &Arc<Material>, t0: f64, t1: f64, c0: &Point3<f64>, c1: &Point3<f64>, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
+pub fn moving_sphere_intersect(r: f64, mat_index: usize, t0: f64, t1: f64, c0: &Point3<f64>, c1: &Point3<f64>, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
     let center = moving_sphere_center(c0, c1, t0, t1, ray.time);
     let diff: Vector3<f64> = ray.origin - center;
     // get quadratic equation, calculate discriminant
@@ -140,14 +139,14 @@ pub fn moving_sphere_intersect(r: f64, mat: &Arc<Material>, t0: f64, t1: f64, c0
     let ans = (-b - root) * inv_a; // try first solution to equation
     if ans < tmax && ans > tmin {
         let hit = ray.at(ans);
-        let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, Arc::clone(mat));
+        let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, mat_index);
         hit_record.set_front(ray);
         return Some(hit_record);
     }
     let ans = (-b + root) * inv_a;
     if ans < tmax && ans > tmin {
         let hit = ray.at(ans);
-        let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, Arc::clone(mat));
+        let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, mat_index);
         hit_record.set_front(ray);
         return Some(hit_record);
     } else {
