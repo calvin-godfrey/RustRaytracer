@@ -192,9 +192,9 @@ pub fn get_new_box(bbox: hittable::BoundingBox, t: &Arc<Projective3<f64>>) -> hi
 }
 
 #[allow(dead_code)]
-fn box_compare(a: &Box<Primitive>, b: &Box<Primitive>, axis: usize) -> std::cmp::Ordering {
-    let box_a = Primitive::get_bounding_box(a.as_ref(), 0., 0.);
-    let box_b = Primitive::get_bounding_box(b.as_ref(), 0., 0.);
+fn box_compare(a: &Primitive, b: &Primitive, axis: usize) -> std::cmp::Ordering {
+    let box_a = Primitive::get_bounding_box(a, 0., 0.);
+    let box_b = Primitive::get_bounding_box(b, 0., 0.);
     if box_a.is_none() || box_b.is_none() {
         println!("Error, cannot compare objects");
         return std::cmp::Ordering::Equal;
@@ -213,8 +213,8 @@ fn box_compare(a: &Box<Primitive>, b: &Box<Primitive>, axis: usize) -> std::cmp:
 }
 
 #[allow(dead_code)]
-pub fn box_x_compare(a: &Box<Primitive>, b: &Box<Primitive>) -> std::cmp::Ordering { box_compare(a, b, 0) }
+pub fn box_x_compare(a: &Primitive, b: &Primitive) -> std::cmp::Ordering { box_compare(a, b, 0) }
 #[allow(dead_code)]
-pub fn box_y_compare(a: &Box<Primitive>, b: &Box<Primitive>) -> std::cmp::Ordering { box_compare(a, b, 1) }
+pub fn box_y_compare(a: &Primitive, b: &Primitive) -> std::cmp::Ordering { box_compare(a, b, 1) }
 #[allow(dead_code)]
-pub fn box_z_compare(a: &Box<Primitive>, b: &Box<Primitive>) -> std::cmp::Ordering { box_compare(a, b, 2) }
+pub fn box_z_compare(a: &Primitive, b: &Primitive) -> std::cmp::Ordering { box_compare(a, b, 2) }

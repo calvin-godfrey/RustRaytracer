@@ -5,7 +5,8 @@ use std::sync::Arc;
 use crate::hittable::BvhNode;
 use crate::consts::*;
 use crate::util;
-use crate::materials::Material;
+use crate::material::materials::{Texture, Material};
+use crate::primitive::Primitive;
 
 #[derive(Copy, Clone)]
 pub struct Camera {
@@ -85,25 +86,28 @@ impl Ray {
     }
 }
 
-pub fn cast_ray(ray: &Ray, node: &BvhNode, depth: u32) -> Vector3<f64> {
+pub fn cast_ray(objs: &Vec<Primitive>, materials: &Vec<Material>, textures: &Vec<Texture>, ray: &Ray, node: &BvhNode, depth: u32) -> Vector3<f64> {
     if depth <= 0 {
         return Vector3::new(0.0, 0.0, 0.0);
     }
-    let hit_record = node.intersects(ray, SMALL, INFINITY);
+    let hit_record = node.intersects(objs, ray, SMALL, INFINITY);
     
     match hit_record {
         Some(record) => {
-            let emitted = Material::emit(&record.mat, record.uv.x, record.uv.y, &record.p);
-            if Material::scatter(ray, &record).is_none() {
+            let emitted = Material::emit(materials, record.mat_index, textures, record.uv.x, record.uv.y, &record.p);
+            let pair = Material::scatter(materials, record.mat_index, textures, ray, &record);
+            if pair.is_none() {
                 return emitted;
             }
             if !record.front { // only front-facing objects
                 return if AMBIENT_LIGHT { util::get_sky(ray) } else { util::get_background(ray) }
             }
-            let pair: Option<(Ray, Vector3<f64>)> = Material::scatter(ray, &record);
             match pair {
                 Some((x, y)) => {
-                    let col = cast_ray(&x, node, depth - 1);
+                    let col = cast_ray(objs, materials, textures, &x, node, depth - 1);
+                    // if record.mat_index == 1 {
+                    //     return col; // + emitted;
+                    // }
                     return Vector3::new(col.x * y.x * INV_COL_MAX, col.y * y.y * INV_COL_MAX, col.z * y.z * INV_COL_MAX) + emitted;
                 },
                 None => Vector3::new(0.0, 0.0, 0.0) // should never happen

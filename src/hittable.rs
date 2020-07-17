@@ -2,8 +2,8 @@ use nalgebra::base::{Unit, Vector3, Vector2};
 use nalgebra::geometry::{Projective3, Point3};
 use std::cmp::Ordering;
 use std::sync::Arc;
-use crate::material::materials::Material;
 use crate::geometry::Ray;
+use crate::material::materials::{Texture, Material};
 use crate::parser;
 use crate::util;
 use crate::primitive::Primitive;
@@ -13,12 +13,12 @@ pub struct HitRecord {
     pub n: Unit<Vector3<f64>>, // normal of surface at point
     pub p: Point3<f64>, // point of intersection
     pub front: bool, // if the normal points outwards or not
-    pub mat: Arc<Material>, // how the surface acts
     pub uv: Vector2<f64>, // uv texture coordinates
+    pub mat_index: usize,
 }
 
 impl HitRecord {
-    pub fn new(t: f64, n: Unit<Vector3<f64>>, p: Point3<f64>, front: bool, mat: Arc<Material>) -> Self { Self { t, n, p, front, mat, uv: Vector2::new(0., 0.) } }
+    pub fn new(t: f64, n: Unit<Vector3<f64>>, p: Point3<f64>, front: bool, mat_index: usize) -> Self { Self { t, n, p, front, mat_index, uv: Vector2::new(0., 0.) } }
     pub fn set_front(&mut self, ray: &Ray) {
         self.front = ray.dir.dot(self.n.as_ref()) < 0.0;
         self.n = if self.front { self.n } else { -self.n }
@@ -33,16 +33,16 @@ pub struct Mesh {
     pub n: Vec<Vector3<f64>>,
     pub uv: Vec<Vector2<f64>>,
     pub bounding_box: Option<BoundingBox>,
-    pub mat: Arc<Material>,
+    pub mat_index: usize,
 }
 
 impl Mesh {
-    pub fn new(path: &str, trans: Projective3<f64>) -> Self {
-        parser::parse_obj(path, trans)
+    pub fn new(materials: &mut Vec<Material>, textures: &mut Vec<Texture>, path: &str, trans: Projective3<f64>) -> Self {
+        parser::parse_obj(materials, textures, path, trans)
     }
 
-    pub fn generate_triangles(mesh: &Arc<Self>) -> Vec<Box<Primitive>> {
-        let mut triangles: Vec<Box<Primitive>> = Vec::new();
+    pub fn generate_triangles(mesh: &Arc<Self>) -> Vec<Primitive> {
+        let mut triangles: Vec<Primitive> = Vec::new();
         for index in (0..mesh.ind.len()).step_by(3) {
             let v1 = mesh.p[mesh.ind[index]];
             let v2 = mesh.p[mesh.ind[index + 1]];
@@ -54,7 +54,7 @@ impl Mesh {
             let z_min = v1.z.min(v2.z.min(v3.z));
             let z_max = v1.z.max(v2.z.max(v3.z));
             let tri_box = BoundingBox::new(Point3::new(x_min, y_min, z_min), Point3::new(x_max, y_max, z_max));
-            let tri: Box<Primitive> = Box::new(Primitive::Triangle {mesh: Arc::clone(mesh), ind: index, bounding_box: Some(tri_box)});
+            let tri: Primitive = Primitive::Triangle {mesh: Arc::clone(mesh), ind: index, bounding_box: Some(tri_box)};
             triangles.push(tri);
         }
         triangles
@@ -105,7 +105,7 @@ impl Mesh {
             uv1 + uv2 + uv3
         };
 
-        let mut record = HitRecord::new(t, normal, point, true, Arc::clone(&self.mat));
+        let mut record = HitRecord::new(t, normal, point, true, self.mat_index);
         record.set_front(ray);
         record.uv = uv;
         Some(record)
@@ -172,21 +172,21 @@ pub enum BvhNode {
         bounding_box: BoundingBox,
     },
     Leaf {
-        obj: Box<Primitive>,
+        index: usize,
         bounding_box: BoundingBox,
     },
     Empty
 }
 
 impl BvhNode {
-    pub fn intersects(&self, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
+    pub fn intersects(&self, objs: &Vec<Primitive>, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
         match self {
             BvhNode::Internal { left, right, bounding_box } => {
                 if !bounding_box.intersects(ray, tmin, tmax) {
                     return None;
                 }
-                let left_option = left.intersects(ray, tmin, tmax);
-                let right_option = right.intersects(ray, tmin, tmax);
+                let left_option = left.intersects(objs, ray, tmin, tmax);
+                let right_option = right.intersects(objs, ray, tmin, tmax);
 
                 match &left_option {
                     Some(l) => {
@@ -203,18 +203,18 @@ impl BvhNode {
                     }
                 }
             }
-            BvhNode::Leaf { obj, bounding_box } => {
+            BvhNode::Leaf { index, bounding_box } => {
                 if !bounding_box.intersects(ray, tmin, tmax) {
                     return None;
                 }
-                return Primitive::intersects(obj, ray, tmin, tmax);
+                return Primitive::intersects(objs, *index, ray, tmin, tmax);
             }
             BvhNode::Empty => { return None; }
         }
     }
 
     #[allow(unused_variables)]
-    pub fn new(objects: &mut Vec<Box<Primitive>>, start: usize, end: usize, t0: f64, t1: f64) -> BvhNode {
+    pub fn new(objects: &mut Vec<Primitive>, start: usize, end: usize, t0: f64, t1: f64) -> BvhNode {
         let r = util::rand();
         let comp = if r < 1. / 3. {
             util::box_x_compare
@@ -226,39 +226,33 @@ impl BvhNode {
         let num_obj = end - start;
         let final_left: BvhNode;
         let final_right: BvhNode;
-        let curr: Box<Primitive>;
         if num_obj == 1 {
-            curr = objects.remove(0);
-            let bbox = Primitive::get_bounding_box(curr.as_ref(), t0, t1);
+            let bbox = Primitive::get_bounding_box(&objects[start], t0, t1);
             let bbox_copy = BoundingBox::make_copy(bbox);
-            return BvhNode::Leaf {obj: curr, bounding_box: bbox_copy};
+            return BvhNode::Leaf {index: start, bounding_box: bbox_copy};
         } else if num_obj == 2 {
             if comp(&objects[start], &objects[start + 1]) != Ordering::Greater {
-                curr = objects.remove(0);
-                let next = objects.remove(0);
-                return BvhNode::handle_two(curr, next, t0, t1);
+                return BvhNode::handle_two(objects, start, start + 1, t0, t1);
             } else {
-                let next = objects.remove(0);
-                curr = objects.remove(0);
-                return BvhNode::handle_two(curr, next, t0, t1);
+                return BvhNode::handle_two(objects, start + 1, start, t0, t1);
             }
         } else {
             let slice = &mut objects[start..end];
             slice.sort_by(comp);
             let mid = start + num_obj / 2;
             final_left = BvhNode::new(objects, start, mid, t0, t1);
-            final_right = BvhNode::new(objects, start, end - mid, t0, t1);
+            final_right = BvhNode::new(objects, mid, end, t0, t1);
         }
 
         let left_box: Option<BoundingBox> = match &final_left {
             BvhNode::Internal { left, right, bounding_box } => {Some(BoundingBox::make_new(bounding_box))}
-            BvhNode::Leaf { obj, bounding_box } => {Some(BoundingBox::make_new(bounding_box))}
+            BvhNode::Leaf { index, bounding_box } => {Some(BoundingBox::make_new(bounding_box))}
             BvhNode::Empty => { None }
         };
 
         let right_box: Option<BoundingBox> = match &final_right {
             BvhNode::Internal { left, right, bounding_box } => {Some(BoundingBox::make_new(bounding_box))}
-            BvhNode::Leaf { obj, bounding_box } => {Some(BoundingBox::make_new(bounding_box))}
+            BvhNode::Leaf { index, bounding_box } => {Some(BoundingBox::make_new(bounding_box))}
             BvhNode::Empty => { None }
         };
 
@@ -287,19 +281,19 @@ impl BvhNode {
         BvhNode::Internal { left: Box::new(final_left), right: Box::new(final_right), bounding_box: curr_box.unwrap() }
     }
 
-    fn handle_two(curr: Box<Primitive>, next: Box<Primitive>, t0: f64, t1: f64) -> BvhNode {
-        let inner_bb = BoundingBox::make_copy(Primitive::get_bounding_box(next.as_ref(), t0, t1));
-        let curr_bb = BoundingBox::make_copy(Primitive::get_bounding_box(curr.as_ref(), t0, t1));
+    fn handle_two(objs: &Vec<Primitive>, curr: usize, next: usize, t0: f64, t1: f64) -> BvhNode {
+        let inner_bb = BoundingBox::make_copy(Primitive::get_bounding_box(&objs[next], t0, t1));
+        let curr_bb = BoundingBox::make_copy(Primitive::get_bounding_box(&objs[curr], t0, t1));
         let bb = BoundingBox::union(&inner_bb, &curr_bb);
-        let inner_right = BvhNode::Leaf {obj: curr, bounding_box: curr_bb };
-        let inner_left = BvhNode::Leaf { obj: next, bounding_box: inner_bb };
+        let inner_right = BvhNode::Leaf {index: curr, bounding_box: curr_bb };
+        let inner_left = BvhNode::Leaf { index: next, bounding_box: inner_bb };
 
         BvhNode::Internal {left: Box::new(inner_left), right: Box::new(inner_right), bounding_box: bb}
     }
 }
 
 pub struct Cube {
-    mat: Arc<Material>,
+    mat_index: usize,
     min: Vector3<f64>,
     max: Vector3<f64>,
     transform: Option<Arc<Projective3<f64>>>,
@@ -307,24 +301,24 @@ pub struct Cube {
 
 impl Cube {
     #[allow(dead_code)]
-    pub fn new(min: Vector3<f64>, max: Vector3<f64>, mat: Arc<Material>) -> Self {
-        Self {min, max, mat: Arc::clone(&mat), transform: None }
+    pub fn new(min: Vector3<f64>, max: Vector3<f64>, mat_index: usize) -> Self {
+        Self {min, max, mat_index, transform: None }
     }
 
-    pub fn new_transform(min: Vector3<f64>, max: Vector3<f64>, mat: Arc<Material>, transform: Arc<Projective3<f64>>) -> Self {
-        Self { min, max, mat: Arc::clone(&mat), transform: Some(Arc::clone(&transform))}
+    pub fn new_transform(min: Vector3<f64>, max: Vector3<f64>, mat_index: usize, transform: Arc<Projective3<f64>>) -> Self {
+        Self { min, max, mat_index, transform: Some(Arc::clone(&transform))}
     }
 
-    pub fn get_sides(&self) -> Vec<Box<Primitive>> {
+    pub fn get_sides(&self) -> Vec<Primitive> {
         let min = self.min;
         let max = self.max;
-        let z0 = Primitive::new_flip_face(Box::new(Primitive::new_xy_rect_transform(min.x, min.y, max.x, max.y, min.z, Arc::clone(&self.mat), self.transform.clone())));
-        let z1 = Primitive::new_xy_rect_transform(min.x, min.y, max.x, max.y, max.z, Arc::clone(&self.mat), self.transform.clone());
-        let x0 = Primitive::new_flip_face(Box::new(Primitive::new_yz_rect_transform(min.y, min.z, max.y, max.z, min.x, Arc::clone(&self.mat), self.transform.clone())));
-        let x1 = Primitive::new_yz_rect_transform(min.y, min.z, max.y, max.z, max.x, Arc::clone(&self.mat), self.transform.clone());
-        let y0 = Primitive::new_flip_face(Box::new(Primitive::new_xz_rect_transform(min.x, min.z, max.x, max.z, min.y, Arc::clone(&self.mat), self.transform.clone())));
-        let y1 = Primitive::new_xz_rect_transform(min.x, min.z, max.x, max.z, max.y, Arc::clone(&self.mat), self.transform.clone());
-        vec![Box::new(z0), Box::new(z1), Box::new(y0), Box::new(y1), Box::new(x0), Box::new(x1)]
+        let z0 = Primitive::new_flip_face(Box::new(Primitive::new_xy_rect_transform(min.x, min.y, max.x, max.y, min.z, self.mat_index, self.transform.clone())));
+        let z1 = Primitive::new_xy_rect_transform(min.x, min.y, max.x, max.y, max.z, self.mat_index, self.transform.clone());
+        let x0 = Primitive::new_flip_face(Box::new(Primitive::new_yz_rect_transform(min.y, min.z, max.y, max.z, min.x, self.mat_index, self.transform.clone())));
+        let x1 = Primitive::new_yz_rect_transform(min.y, min.z, max.y, max.z, max.x, self.mat_index, self.transform.clone());
+        let y0 = Primitive::new_flip_face(Box::new(Primitive::new_xz_rect_transform(min.x, min.z, max.x, max.z, min.y, self.mat_index, self.transform.clone())));
+        let y1 = Primitive::new_xz_rect_transform(min.x, min.z, max.x, max.z, max.y, self.mat_index, self.transform.clone());
+        vec![z0, z1, y0, y1, x0, x1]
     }
 }
 
