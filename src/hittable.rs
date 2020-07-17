@@ -241,7 +241,7 @@ impl BvhNode {
             slice.sort_by(comp);
             let mid = start + num_obj / 2;
             final_left = BvhNode::new(objects, start, mid, t0, t1);
-            final_right = BvhNode::new(objects, start, end - mid, t0, t1);
+            final_right = BvhNode::new(objects, mid, end, t0, t1);
         }
 
         let left_box: Option<BoundingBox> = match &final_left {

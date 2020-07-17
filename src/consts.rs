@@ -15,4 +15,4 @@ pub const RAYS_PER_THREAD: u64 = TOTAL_RAYS / (NUM_THREADS as u64);
 pub const THREAD_UPDATE: u64 = RAYS_PER_THREAD / 200u64;
 pub const PATH: &str = "test3.png";
 pub const INV_COL_MAX: f64 = 1. / 256.;
-pub const AMBIENT_LIGHT: bool = true;
+pub const AMBIENT_LIGHT: bool = false;

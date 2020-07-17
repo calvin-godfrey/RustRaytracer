@@ -105,6 +105,9 @@ pub fn cast_ray(objs: &Vec<Primitive>, materials: &Vec<Material>, textures: &Vec
             match pair {
                 Some((x, y)) => {
                     let col = cast_ray(objs, materials, textures, &x, node, depth - 1);
+                    // if record.mat_index == 1 {
+                    //     return col; // + emitted;
+                    // }
                     return Vector3::new(col.x * y.x * INV_COL_MAX, col.y * y.y * INV_COL_MAX, col.z * y.z * INV_COL_MAX) + emitted;
                 },
                 None => Vector3::new(0.0, 0.0, 0.0) // should never happen

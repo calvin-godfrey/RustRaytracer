@@ -92,35 +92,37 @@ pub fn yz_rect_intersect(y0: f64, z0: f64, y1: f64, z1: f64, k: f64, mat_index: 
 
 pub fn sphere_intersect(center: &Point3<f64>, r: &f64, mat_index: usize, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
     let diff: Vector3<f64> = ray.origin - center;
-        // get quadratic equation, calculate discriminant
-        let a = ray.dir.dot(&ray.dir);
-        let b = diff.dot(&ray.dir);
-        let c = diff.dot(&diff) - r * r;
-        let disc = b * b - a * c;
-        if disc < 0.0 {
-            return None;
-        }
-        let inv_a = 1.0 / a;
-        let root = disc.sqrt();
-        let ans = (-b - root) * inv_a; // try first solution to equationd
-        let mut hit_record: HitRecord;
+    // get quadratic equation, calculate discriminant
+    let a = ray.dir.dot(&ray.dir);
+    let b = diff.dot(&ray.dir);
+    let c = diff.dot(&diff) - r * r;
+    let disc = b * b - a * c;
+    if disc < 0.0 {
+        return None;
+    }
+    let inv_a = 1.0 / a;
+    let root = disc.sqrt();
+    let ans = (-b - root) * inv_a; // try first solution to equation
+    let mut hit_record: HitRecord;
+    if ans < tmax && ans > tmin {
+        let hit = ray.at(ans);
+        hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, mat_index);
+        hit_record.set_front(ray);
+        hit_record.front = true; // no backside to sphere
+    } else {
+        let ans = (-b + root) * inv_a;
         if ans < tmax && ans > tmin {
             let hit = ray.at(ans);
-            hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, mat_index);
+            let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, mat_index);
             hit_record.set_front(ray);
+            hit_record.front = true; // no backside to sphere
+            return Some(hit_record);
         } else {
-            let ans = (-b + root) * inv_a;
-            if ans < tmax && ans > tmin {
-                let hit = ray.at(ans);
-                let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, mat_index);
-                hit_record.set_front(ray);
-                return Some(hit_record);
-            } else {
-                return None;
-            }
+            return None;
         }
-        util::get_sphere_uv((hit_record.p - center).scale( 1. / *r), &mut hit_record);
-        Some(hit_record)
+    }
+    util::get_sphere_uv((hit_record.p - center).scale( 1. / *r), &mut hit_record);
+    Some(hit_record)
 }
 
 pub fn moving_sphere_intersect(r: f64, mat_index: usize, t0: f64, t1: f64, c0: &Point3<f64>, c1: &Point3<f64>, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
@@ -141,6 +143,7 @@ pub fn moving_sphere_intersect(r: f64, mat_index: usize, t0: f64, t1: f64, c0: &
         let hit = ray.at(ans);
         let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, mat_index);
         hit_record.set_front(ray);
+        hit_record.front = true; // no backside to sphere
         return Some(hit_record);
     }
     let ans = (-b + root) * inv_a;
@@ -148,6 +151,7 @@ pub fn moving_sphere_intersect(r: f64, mat_index: usize, t0: f64, t1: f64, c0: &
         let hit = ray.at(ans);
         let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, mat_index);
         hit_record.set_front(ray);
+        hit_record.front = true; // no backside to sphere
         return Some(hit_record);
     } else {
         return None;
