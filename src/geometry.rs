@@ -99,9 +99,9 @@ pub fn cast_ray(objs: &Vec<Primitive>, materials: &Vec<Material>, textures: &Vec
             if pair.is_none() {
                 return emitted;
             }
-            if !record.front { // only front-facing objects
-                return if AMBIENT_LIGHT { util::get_sky(ray) } else { util::get_background(ray) }
-            }
+            // if !record.front { // only front-facing objects
+            //     return if AMBIENT_LIGHT { util::get_sky(ray) } else { util::get_background(ray) }
+            // }
             match pair {
                 Some((x, y)) => {
                     let col = cast_ray(objs, materials, textures, &x, node, depth - 1);

@@ -87,12 +87,26 @@ pub fn increment_color(arr: &mut Vec<Vec<(f64, f64, f64, u32)>>, i: usize, j: us
     arr[i][j].3 += 1;
 }
 
+#[allow(dead_code)]
 pub fn thread_safe_increment_color(arr: &Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>>, i: usize, j: usize, color: &Vector3<f64>) {
     let mut data = arr.lock().unwrap();
     data[i][j].0 += color.x;
     data[i][j].1 += color.y;
     data[i][j].2 += color.z;
     data[i][j].3 += 1;
+}
+
+pub fn thread_safe_update_image(arr: &Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>>, local: &Vec<Vec<(f64, f64, f64, u32)>>) {
+    let mut data = arr.lock().unwrap();
+    for i in 0usize..IMAGE_HEIGHT as usize {
+        for j in 0usize..IMAGE_WIDTH as usize {
+            let (r, g, b, n) = local[i][j];
+            data[i][j].0 += r;
+            data[i][j].1 += g;
+            data[i][j].2 += b;
+            data[i][j].3 += n;
+        }
+    }
 }
 
 pub fn refract(vec: &Unit<Vector3<f64>>, n: &Unit<Vector3<f64>>, eta: f64) -> Vector3<f64> {
@@ -189,6 +203,18 @@ pub fn get_new_box(bbox: hittable::BoundingBox, t: &Arc<Projective3<f64>>) -> hi
         }
     }
     hittable::BoundingBox::new(min, max)
+}
+
+pub fn make_empty_image() -> Vec<Vec<(f64, f64, f64, u32)>> {
+    let mut pixels: Vec<Vec<(f64, f64, f64, u32)>> = Vec::new();
+    for _ in 0..IMAGE_HEIGHT {
+        let mut temp: Vec<(f64, f64, f64, u32)> = Vec::new();
+        for _ in 0..IMAGE_WIDTH {
+            temp.push((0., 0., 0., 0u32));
+        }
+        pixels.push(temp);
+    }
+    pixels
 }
 
 #[allow(dead_code)]

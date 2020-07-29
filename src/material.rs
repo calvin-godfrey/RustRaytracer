@@ -22,6 +22,9 @@ pub mod materials {
         },
         DiffuseLight {
             texture_index: usize,
+        },
+        Isotropic {
+            texture_index: usize,
         }
     }
 
@@ -53,6 +56,11 @@ pub mod materials {
                     return Some((Ray::new_time(hit_record.p, new_dir, ray.time), Vector3::new(255., 255., 255.)));
                 }
                 Material::DiffuseLight { texture_index: _ } => { None }
+                Material::Isotropic { texture_index } => {
+                    let new_ray = Ray::new_time(hit_record.p, rand_in_unit_sphere(), ray.time);
+                    let color = Texture::value(textures, *texture_index, hit_record.uv.x, hit_record.uv.y, &hit_record.p);
+                    Some((new_ray, color))
+                }
             }
         }
 
@@ -63,12 +71,14 @@ pub mod materials {
                 Material::Metal { albedo, roughness } => {Vector3::new(0., 0., 0.)}
                 Material::Dielectric { index } => {Vector3::new(0., 0., 0.)}
                 Material::DiffuseLight { texture_index } => { Texture::value(textures, *texture_index, u, v, p) }
+                Material::Isotropic { texture_index } => {Vector3::new(0., 0., 0.)}
             }
         }
         pub fn new_lambertian(texture_index: usize) -> Self { Material::Lambertian { texture_index } }
         pub fn new_metal(albedo: Vector3<f64>, roughness: f64) -> Self { Material::Metal { albedo, roughness } }
         pub fn new_dielectric(index: f64) -> Self { Material::Dielectric { index } }
         pub fn new_diffuse(texture_index: usize) -> Self { Material::DiffuseLight { texture_index } }
+        pub fn new_isotropic(texture_index: usize) -> Self { Material::Isotropic { texture_index } }
 
     }
 

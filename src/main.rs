@@ -25,7 +25,7 @@ use scenes::*;
 
 fn main() {
     let mut img = RgbImage::new(IMAGE_WIDTH, IMAGE_HEIGHT);
-    let (camera, node, objs, materials, textures) = scenes::cornell_box();
+    let (camera, node, objs, materials, textures) = scenes::with_everything();
 
     if SINGLE_THREAD {
         singlethread(&mut img, PATH, &node, &camera, &objs, &materials, &textures);
@@ -85,15 +85,7 @@ fn singlethread(img: &mut image::RgbImage, path: &str, node: &BvhNode, camera: &
 }
 
 fn multithread (img: image::RgbImage, node: BvhNode, camera: Camera, objs: Vec<Primitive>, materials: Vec<Material>, textures: Vec<Texture>) {
-    let mut pixels: Vec<Vec<(f64, f64, f64, u32)>> = Vec::new();
-    for _ in 0..IMAGE_HEIGHT {
-        let mut temp: Vec<(f64, f64, f64, u32)> = Vec::new();
-        for _ in 0..IMAGE_WIDTH {
-            temp.push((0., 0., 0., 0u32));
-        }
-        pixels.push(temp);
-    }
-
+    let pixels: Vec<Vec<(f64, f64, f64, u32)>> = util::make_empty_image();
 
     let pixels_mutex: Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>> = Arc::new(Mutex::new(pixels));
     let node_arc: Arc<BvhNode> = Arc::new(node);
@@ -115,12 +107,14 @@ fn multithread (img: image::RgbImage, node: BvhNode, camera: Camera, objs: Vec<P
         let textures_clone = Arc::clone(&texture_arc);
 
         thread_vec.push(thread::spawn(move || {
+            let mut local_img: Vec<Vec<(f64, f64, f64, u32)>> = util::make_empty_image();
             for r in 0..RAYS_PER_THREAD {
                 if r % THREAD_UPDATE == 0 {
                     println!("Thread {} drawing ray {} of {} ({:.2}%)", thread_num, r, RAYS_PER_THREAD, (r as f64 * 100.) / (RAYS_PER_THREAD as f64));
                     if thread_num == 0 { // only draw once
                         util::thread_safe_draw_picture(&image_clone, &pixels_clone, PATH);
                     }
+                    util::thread_safe_update_image(&pixels_clone, &local_img);
                 }
                 let u: f64 = util::rand();
                 let v: f64 = util::rand();
@@ -128,7 +122,11 @@ fn multithread (img: image::RgbImage, node: BvhNode, camera: Camera, objs: Vec<P
                 let res = geometry::cast_ray(&objs_clone, &mats_clone, &textures_clone, &ray, &node_clone, MAX_DEPTH);
                 let i = (u * IMAGE_WIDTH as f64).floor() as usize;
                 let j = (v * IMAGE_HEIGHT as f64).floor() as usize;
-                util::thread_safe_increment_color(&pixels_clone, j, i, &res);
+                local_img[j][i].0 += res.x;
+                local_img[j][i].1 += res.y;
+                local_img[j][i].2 += res.z;
+                local_img[j][i].3 += 1;
+                // util::thread_safe_increment_color(&pixels_clone, j, i, &res);
             }
         }));
     }

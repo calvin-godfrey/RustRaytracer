@@ -5,6 +5,8 @@ use crate::geometry::Ray;
 use crate::hittable::HitRecord;
 use crate::util;
 use crate::primitive::moving_sphere_center;
+use crate::primitive::Primitive;
+use crate::consts::*;
 
 #[allow(unused_variables)]
 pub fn xy_rect_intersect(x0: f64, y0: f64, x1: f64, y1: f64, k: f64, mat_index: usize, transform: &Option<Arc<Projective3<f64>>>, ray: &Ray, t0: f64, t1: f64) -> Option<HitRecord> {
@@ -108,14 +110,12 @@ pub fn sphere_intersect(center: &Point3<f64>, r: &f64, mat_index: usize, ray: &R
         let hit = ray.at(ans);
         hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, mat_index);
         hit_record.set_front(ray);
-        hit_record.front = true; // no backside to sphere
     } else {
         let ans = (-b + root) * inv_a;
         if ans < tmax && ans > tmin {
             let hit = ray.at(ans);
             let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, mat_index);
             hit_record.set_front(ray);
-            hit_record.front = true; // no backside to sphere
             return Some(hit_record);
         } else {
             return None;
@@ -143,7 +143,6 @@ pub fn moving_sphere_intersect(r: f64, mat_index: usize, t0: f64, t1: f64, c0: &
         let hit = ray.at(ans);
         let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, mat_index);
         hit_record.set_front(ray);
-        hit_record.front = true; // no backside to sphere
         return Some(hit_record);
     }
     let ans = (-b + root) * inv_a;
@@ -151,9 +150,48 @@ pub fn moving_sphere_intersect(r: f64, mat_index: usize, t0: f64, t1: f64, c0: &
         let hit = ray.at(ans);
         let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, mat_index);
         hit_record.set_front(ray);
-        hit_record.front = true; // no backside to sphere
         return Some(hit_record);
     } else {
         return None;
     }
+}
+
+pub fn medium_intersects(shape: &Primitive, inv_density: f64, mat_index: usize, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
+    let transform = Primitive::get_transform(shape);
+    let transformed_ray = if transform.is_none() { *ray } else { ray.transform(transform.as_ref().unwrap()) };
+    let first_record = Primitive::intersects_obj(shape, ray, -INFINITY, INFINITY);
+    if first_record.is_none() {
+        // println!("1");
+        return None;
+    }
+    let mut first_record = first_record.unwrap();
+    let second_record  = Primitive::intersects_obj(shape, ray, first_record.t + 100. * SMALL, INFINITY);
+    if second_record.is_none() {
+        // println!("2");
+        return None; // should only happen if the shape is infinitely long
+    }
+    let mut second_record = second_record.unwrap();
+    if first_record.t < tmin {
+        first_record.t = tmin;
+    }
+    if second_record.t > tmax {
+        second_record.t = tmax;
+    }
+    if first_record.t >= second_record.t {
+        return None;
+    }
+    if first_record.t < 0. {
+        first_record.t = 0.;
+    }
+
+    let ray_length: f64 = transformed_ray.dir.magnitude();
+    let distance_inside = (second_record.t - first_record.t) * ray_length;
+    let hit = inv_density * util::rand().ln();
+    if hit > distance_inside {
+        return None;
+    }
+
+    let t = first_record.t + hit / ray_length;
+    let p = transformed_ray.at(t);
+    Some(HitRecord::new(t, Unit::new_normalize(Vector3::new(1., 0., 0.)), p, true, mat_index)) // TODO: Proper values?
 }

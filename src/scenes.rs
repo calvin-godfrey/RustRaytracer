@@ -216,3 +216,119 @@ pub fn cornell_box() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<Material
     let node = BvhNode::new(&mut vec, 0, len, 0., 1.);
     (camera, node, vec, materials, textures)
 }
+
+#[allow(dead_code)]
+pub fn smokey_box() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<Material>, Vec<Texture>) {
+
+    let from = Point3::new(278., 278., -800.);
+    let to = Point3::new(278., 278., 0.);
+    let up = Vector3::new(0., 1., 0.);
+
+    let camera = geometry::Camera::new_motion_blur(from, to, up, ASPECT_RATIO, 40., 0., 10., 0., 1.);
+
+    let mut vec: Vec<Primitive> = Vec::new();
+    let mut materials: Vec<Material> = Vec::new();
+    let mut textures: Vec<Texture> = Vec::new();
+    textures.push(Texture::new_solid_color(Vector3::new(165.75, 12.75, 12.75))); // red
+    textures.push(Texture::new_solid_color(Vector3::new(186.15, 186.15, 186.15))); // white
+    textures.push(Texture::new_solid_color(Vector3::new(30.6, 114.75, 38.25))); // green
+    textures.push(Texture::new_solid_color(Vector3::new(3825., 3825., 3825.))); // light
+    textures.push(Texture::new_solid_color(Vector3::new(0., 0., 0.))); // black for smoke
+    textures.push(Texture::new_solid_color(Vector3::new(255., 255., 255.))); // white for fog
+
+    materials.push(Material::new_lambertian(0));
+    materials.push(Material::new_lambertian(1));
+    materials.push(Material::new_lambertian(2));
+    materials.push(Material::new_diffuse(3));
+    materials.push(Material::new_isotropic(4));
+    materials.push(Material::new_isotropic(5));
+    
+    vec.push(Primitive::new_flip_face(Box::new(Primitive::new_yz_rect(0., 0., 555., 555., 555., 2))));
+    vec.push(Primitive::new_yz_rect(0., 0., 555., 555., 0., 0));
+    vec.push(Primitive::new_xz_rect(213., 227., 343., 332., 554.9, 3));
+    vec.push(Primitive::new_xz_rect(0., 0., 555., 555., 0., 1));
+    vec.push(Primitive::new_flip_face(Box::new(Primitive::new_xz_rect(0., 0., 555., 555., 555., 1))));
+    vec.push(Primitive::new_flip_face(Box::new(Primitive::new_xy_rect(0., 0., 555., 555., 555., 1))));
+
+    vec.push(Primitive::new_medium(Box::new(Primitive::new_sphere(Point3::new(212.5, 82.5, 147.5), 82.5, 4)), 0.01, 4));
+    vec.push(Primitive::new_medium(Box::new(Primitive::new_sphere(Point3::new(347.5, 92.5, 277.5), 92.5, 5)), 0.01, 5));
+    
+    let len = vec.len();
+    
+    let node = BvhNode::new(&mut vec, 0, len, 0., 1.);
+    (camera, node, vec, materials, textures)
+}
+
+#[allow(dead_code)]
+pub fn with_everything() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<Material>, Vec<Texture>) {
+    let from = Point3::new(478., 278., -600.);
+    let to = Point3::new(278., 278., 0.);
+    let up = Vector3::new(0., 1., 0.);
+
+    let camera = geometry::Camera::new_motion_blur(from, to, up, ASPECT_RATIO, 40., 0., 10., 0., 1.);
+    let mut textures: Vec<Texture> = Vec::new();
+    let mut materials: Vec<Material> = Vec::new();
+    let mut objs: Vec<Primitive> = Vec::new();
+    textures.push(Texture::new_solid_color(Vector3::new(122.4, 211.7, 135.3))); // ground
+    materials.push(Material::new_lambertian(0));
+    let boxes_per_side = 20;
+    for i in 0..boxes_per_side {
+        for j in 0..boxes_per_side {
+            let w = 100.;
+            let x0 = -1000.0 + i as f64 * w;
+            let z0 = -1000.0 + j as f64 * w;
+            let y0 = 0.0;
+            let x1 = x0 + w;
+            let z1 = z0 + w;
+            let y1 = util::rand_range(1., 91.);
+            let cube = Cube::new(Vector3::new(x0, y0, z0), Vector3::new(x1, y1, z1), 0);
+            objs.extend(cube.get_sides());
+        }
+    }
+    textures.push(Texture::new_solid_color(Vector3::new(1785., 1785., 1785.))); // light
+    materials.push(Material::new_diffuse(textures.len() - 1));
+    objs.push(Primitive::new_xz_rect(123., 147., 423., 412., 554., materials.len() - 1));
+
+    textures.push(Texture::new_solid_color(Vector3::new(178.5, 76.5, 25.5))); // moving sphere
+    materials.push(Material::new_lambertian(textures.len() - 1));
+    objs.push(Primitive::new_moving_sphere(Point3::new(400., 400., 200.), Point3::new(430., 400., 200.),0., 1., 50., materials.len() - 1));
+
+    materials.push(Material::new_dielectric(1.5));
+    objs.push(Primitive::new_sphere(Point3::new(260., 150., 45.), 50., materials.len() - 1)); // dielectric
+
+    // metal
+    materials.push(Material::new_metal(Vector3::new(204., 204., 229.3), 10.));
+    objs.push(Primitive::new_sphere(Point3::new(0., 150., 145.), 50., materials.len() - 1));
+
+     // subsurface reflection thing
+    objs.push(Primitive::new_sphere(Point3::new(360., 150., 145.), 70., materials.len() - 2));
+    textures.push(Texture::new_solid_color(Vector3::new(81., 132., 249.6)));
+    materials.push(Material::new_lambertian(textures.len() - 1));
+    objs.push(Primitive::new_medium(Box::new(Primitive::new_sphere(Point3::new(360., 150., 145.), 70., 3)), 0.2, materials.len() - 1));
+
+    // give everything slight smoke
+    textures.push(Texture::new_solid_color(Vector3::new(255., 255., 255.0)));
+    materials.push(Material::new_lambertian(textures.len() - 1));
+    objs.push(Primitive::new_medium(Box::new(Primitive::new_sphere(Point3::new(0., 0., 0.), 5000., 1)), 0.0001, materials.len() - 1));
+    
+    textures.push(Texture::new_texture("data/earthmap.jpg")); // textured sphere
+    materials.push(Material::new_lambertian(textures.len() - 1));
+    objs.push(Primitive::new_sphere(Point3::new(400., 200., 400.), 100., materials.len() - 1));
+
+    textures.push(Texture::new_solid_color(Vector3::new(186.2, 186.2, 186.2)));
+    materials.push(Material::new_lambertian(textures.len() - 1));
+    let rotate = Rotation3::from_euler_angles(60. * PI / 180., 34. * PI / 180., 0.);
+    let translate = Projective3::from_matrix_unchecked(Matrix4::identity().append_translation(&Vector3::new(-17., 353., 478.)));
+    let transform: Projective3<f64> = translate * rotate;
+    for _ in 0..1000 {
+        let x = util::rand_range(-83., 83.);
+        let y = util::rand_range(-83., 83.);
+        let z = util::rand_range(-83., 83.);
+        let center = Point3::new(x, y, z);
+        let new_center = transform.transform_point(&center);
+        objs.push(Primitive::new_sphere(new_center, 10., materials.len() - 1));
+    }
+
+    let len = objs.len();
+    (camera, BvhNode::new(&mut objs, 0, len, 0., 1.), objs, materials, textures)
+}
