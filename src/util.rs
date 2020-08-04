@@ -75,24 +75,35 @@ pub fn rand_vector(min: f64, max: f64) -> Vector3<f64> {
     Vector3::new(rand_range(min, max), rand_range(min, max), rand_range(min, max))
 }
 
+pub fn rand_cosine_dir() -> Vector3<f64> {
+    let r1 = rand();
+    let r2 = rand();
+    let z = (1. - r2).sqrt();
+
+    let phi = 2. * PI * r1;
+    let x = phi.cos() * r2.sqrt();
+    let y = phi.sin() * r2.sqrt();
+    Vector3::new(x, y, z)
+}
+
 pub fn reflect(v: &Vector3<f64>, n: &Unit<Vector3<f64>>) -> Vector3<f64> {
     let scale = 2. * v.dot(n);
     v - n.as_ref().scale(scale)
 }
 
 pub fn increment_color(arr: &mut Vec<Vec<(f64, f64, f64, u32)>>, i: usize, j: usize, color: &Vector3<f64>) {
-    arr[i][j].0 += color.x;
-    arr[i][j].1 += color.y;
-    arr[i][j].2 += color.z;
+    arr[i][j].0 += if color.x == f64::NAN { 0. } else { color.x };
+    arr[i][j].1 += if color.y == f64::NAN { 0. } else { color.y };
+    arr[i][j].2 += if color.z == f64::NAN { 0. } else { color.z };
     arr[i][j].3 += 1;
 }
 
 #[allow(dead_code)]
 pub fn thread_safe_increment_color(arr: &Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>>, i: usize, j: usize, color: &Vector3<f64>) {
     let mut data = arr.lock().unwrap();
-    data[i][j].0 += color.x;
-    data[i][j].1 += color.y;
-    data[i][j].2 += color.z;
+    data[i][j].0 += if color.x == f64::NAN { 0. } else { color.x };
+    data[i][j].1 += if color.y == f64::NAN { 0. } else { color.y };
+    data[i][j].2 += if color.z == f64::NAN { 0. } else { color.z };
     data[i][j].3 += 1;
 }
 
@@ -132,9 +143,12 @@ pub fn draw_picture(image: &mut RgbImage, pixels: &Vec<Vec<(f64, f64, f64, u32)>
 
 fn point_to_color(vec: &Point3<f64>, gamma: f64, samples: u32) -> Rgb<u8> {
     let scale: f64 = 1. / (samples as f64);
-    let r: f64 = clamp(vec[0] * scale, 0., 255.) * INV_COL_MAX;
-    let g: f64 = clamp(vec[1] * scale, 0., 255.) * INV_COL_MAX;
-    let b: f64 = clamp(vec[2] * scale, 0., 255.) * INV_COL_MAX;
+    let r: f64 = clamp(vec[0] * scale, 0., 1.);
+    let g: f64 = clamp(vec[1] * scale, 0., 1.);
+    let b: f64 = clamp(vec[2] * scale, 0., 1.);
+    if r == f64::NAN || g == f64::NAN || b == f64::NAN {
+        println!("BAD");
+    }
     Rgb([(r.powf(gamma) * 256.).round() as u8,
          (g.powf(gamma) * 256.).round() as u8,
          (b.powf(gamma) * 256.).round() as u8])
@@ -169,7 +183,7 @@ pub fn get_sky(ray: &geometry::Ray) -> Vector3<f64> {
     let blue = Rgb([80u8, 159u8, 255u8]);
     let unit: Unit<Vector3<f64>> = Unit::new_normalize(ray.dir);
     let color = gradient(&white, &blue, 0.5 * (1.0 + unit.as_ref().y));
-    return Vector3::new(color[0] as f64, color[1] as f64, color[2] as f64);
+    return Vector3::new(color[0] as f64 * INV_COL_MAX, color[1] as f64 * INV_COL_MAX, color[2] as f64 * INV_COL_MAX);
 }
 
 pub fn get_background(_ray: &geometry::Ray) -> Vector3<f64> {Vector3::new(0., 0., 0.)}

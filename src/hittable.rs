@@ -214,7 +214,7 @@ impl BvhNode {
     }
 
     #[allow(unused_variables)]
-    pub fn new(objects: &mut Vec<Primitive>, start: usize, end: usize, t0: f64, t1: f64) -> BvhNode {
+    pub fn new(objects: &Vec<Primitive>, indices: &mut Vec<usize>, start: usize, end: usize, t0: f64, t1: f64) -> BvhNode {
         let r = util::rand();
         let comp = if r < 1. / 3. {
             util::box_x_compare
@@ -227,21 +227,21 @@ impl BvhNode {
         let final_left: BvhNode;
         let final_right: BvhNode;
         if num_obj == 1 {
-            let bbox = Primitive::get_bounding_box(&objects[start], t0, t1);
+            let bbox = Primitive::get_bounding_box(&objects[indices[start]], t0, t1);
             let bbox_copy = BoundingBox::make_copy(bbox);
-            return BvhNode::Leaf {index: start, bounding_box: bbox_copy};
+            return BvhNode::Leaf {index: indices[start], bounding_box: bbox_copy};
         } else if num_obj == 2 {
-            if comp(&objects[start], &objects[start + 1]) != Ordering::Greater {
-                return BvhNode::handle_two(objects, start, start + 1, t0, t1);
+            if comp(&objects[indices[start]], &objects[indices[start + 1]]) != Ordering::Greater {
+                return BvhNode::handle_two(objects, indices, start, start + 1, t0, t1);
             } else {
-                return BvhNode::handle_two(objects, start + 1, start, t0, t1);
+                return BvhNode::handle_two(objects, indices, start + 1, start, t0, t1);
             }
         } else {
-            let slice = &mut objects[start..end];
-            slice.sort_by(comp);
+            let slice = &mut indices[start..end];
+            slice.sort_by(|a, b| comp(&objects[*a], &objects[*b]));
             let mid = start + num_obj / 2;
-            final_left = BvhNode::new(objects, start, mid, t0, t1);
-            final_right = BvhNode::new(objects, mid, end, t0, t1);
+            final_left = BvhNode::new(objects, indices, start, mid, t0, t1);
+            final_right = BvhNode::new(objects, indices, mid, end, t0, t1);
         }
 
         let left_box: Option<BoundingBox> = match &final_left {
@@ -281,12 +281,12 @@ impl BvhNode {
         BvhNode::Internal { left: Box::new(final_left), right: Box::new(final_right), bounding_box: curr_box.unwrap() }
     }
 
-    fn handle_two(objs: &Vec<Primitive>, curr: usize, next: usize, t0: f64, t1: f64) -> BvhNode {
-        let inner_bb = BoundingBox::make_copy(Primitive::get_bounding_box(&objs[next], t0, t1));
-        let curr_bb = BoundingBox::make_copy(Primitive::get_bounding_box(&objs[curr], t0, t1));
+    fn handle_two(objs: &Vec<Primitive>, indices: &mut Vec<usize>, curr: usize, next: usize, t0: f64, t1: f64) -> BvhNode {
+        let inner_bb = BoundingBox::make_copy(Primitive::get_bounding_box(&objs[indices[next]], t0, t1));
+        let curr_bb = BoundingBox::make_copy(Primitive::get_bounding_box(&objs[indices[curr]], t0, t1));
         let bb = BoundingBox::union(&inner_bb, &curr_bb);
-        let inner_right = BvhNode::Leaf {index: curr, bounding_box: curr_bb };
-        let inner_left = BvhNode::Leaf { index: next, bounding_box: inner_bb };
+        let inner_right = BvhNode::Leaf {index: indices[curr], bounding_box: curr_bb };
+        let inner_left = BvhNode::Leaf { index: indices[next], bounding_box: inner_bb };
 
         BvhNode::Internal {left: Box::new(inner_left), right: Box::new(inner_right), bounding_box: bb}
     }

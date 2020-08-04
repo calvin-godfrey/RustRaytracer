@@ -224,6 +224,86 @@ impl Primitive {
             Primitive::Medium { obj, inv_density, mat_index } => { Primitive::get_transform(obj.as_ref()) }
         }
     }
+
+    #[allow(unused_variables)]
+    pub fn get_pdf(object: &Primitive, origin: &Point3<f64>, dir: &Vector3<f64>) -> f64 {
+        match object {
+            Primitive::Sphere { center, r, mat_index, bounding_box } => {
+                println!("Calling unimplmented funtion, line {} in {}", line!(), file!());
+                0.
+            }
+            Primitive::Triangle { mesh, ind, bounding_box } => {
+                println!("Calling unimplmented funtion, line {} in {}", line!(), file!());
+                0.
+            }
+            Primitive::MovingSphere { r, mat_index, t0, t1, c0, c1, bounding_box } => {
+                println!("Calling unimplmented funtion, line {} in {}", line!(), file!());
+                0.
+            }
+            Primitive::XYRect { x0, y0, x1, y1, k, mat_index, transform, bounding_box } => {
+                println!("Calling unimplmented funtion, line {} in {}", line!(), file!());
+                0.
+            }
+            Primitive::XZRect { x0, z0, x1, z1, k, mat_index, transform, bounding_box } => {
+                let hit = xz_rect_intersect(*x0, *z0, *x1, *z1, *k, *mat_index, transform, &Ray::new(*origin, *dir), SMALL, INFINITY);
+                if hit.is_none() {
+                    return 0.;
+                }
+                let hit = hit.unwrap();
+                let area = (x1 - x0) * (z1 - z0);
+                let d2 = hit.t * hit.t * dir.magnitude_squared();
+                let cos = (dir.dot(&hit.n) / dir.magnitude()).abs();
+                d2 / (cos * area)
+            }
+            Primitive::YZRect { y0, z0, y1, z1, k, mat_index, transform, bounding_box } => {
+                let hit = yz_rect_intersect(*y0, *z0, *y1, *z1, *k, *mat_index, transform, &Ray::new(*origin, *dir), SMALL, INFINITY);
+                if hit.is_none() {
+                    return 0.;
+                }
+                let hit = hit.unwrap();
+                let area = (y1 - y0) * (z1 - z0);
+                let d2 = hit.t * hit.t* dir.magnitude_squared();
+                let cos = (dir.dot(&hit.n) / dir.magnitude()).abs();
+                d2 / (cos * area)
+            }
+            Primitive::FlipFace { obj } => { Primitive::get_pdf(obj.as_ref(), origin, dir) }
+            Primitive::Medium { obj, inv_density, mat_index } => { Primitive::get_pdf(obj.as_ref(), origin, dir) }
+        }
+    }
+
+    #[allow(unused_variables)]
+    pub fn get_rand_dir(object: &Primitive, origin: &Point3<f64>) -> Vector3<f64> {
+        match object {
+            Primitive::Sphere { center, r, mat_index, bounding_box } => {
+                (*center + util::rand_cosine_dir().scale(*r)) - *origin
+            }
+            Primitive::Triangle { mesh, ind, bounding_box } => {
+                println!("Calling unimplmented funtion, line {} in {}", line!(), file!());
+                Vector3::new(0., 0., 0.)
+            }
+            Primitive::MovingSphere { r, mat_index, t0, t1, c0, c1, bounding_box } => {
+                println!("Calling unimplmented funtion, line {} in {}", line!(), file!());
+                Vector3::new(0., 0., 0.)
+            }
+            Primitive::XYRect { x0, y0, x1, y1, k, mat_index, transform, bounding_box } => {
+                let x = util::rand_range(*x0, *x1);
+                let y = util::rand_range(*y0, *y1);
+                Point3::new(x, y, *k) - *origin
+            }
+            Primitive::XZRect { x0, z0, x1, z1, k, mat_index, transform, bounding_box } => {
+                let x = util::rand_range(*x0, *x1);
+                let z = util::rand_range(*z0, *z1);
+                Point3::new(x, *k, z) - *origin
+            }
+            Primitive::YZRect { y0, z0, y1, z1, k, mat_index, transform, bounding_box } => {
+                let z = util::rand_range(*z0, *z1);
+                let y = util::rand_range(*y0, *y1);
+                Point3::new( *k, y, z) - *origin
+            }
+            Primitive::FlipFace { obj } => { Primitive::get_rand_dir(obj.as_ref(), origin) }
+            Primitive::Medium { obj, inv_density, mat_index } => { Primitive::get_rand_dir(obj.as_ref(), origin) }
+        }
+    }
 }
 
 pub fn moving_sphere_center(c0: &Point3<f64>, c1: &Point3<f64>, t0: f64, t1: f64, time: f64) -> Point3<f64> {

@@ -58,10 +58,7 @@ pub fn parse_obj(materials: &mut Vec<Material>, textures: &mut Vec<Texture>, pat
 
             if let Some(id) = mesh.material_id {
                 let mesh_mat: &tobj::Material = &mats[id];
-                let texture_path = &mesh_mat.ambient_texture[..];
-                textures.push(Texture::new_texture(texture_path));
-                let real_mat: Material = Material::new_lambertian(textures.len() - 1);
-                materials.push(real_mat);
+                // materials.push(Material::new_metal(Vector3::new(0.8, 0.8, 0.2), 1.));
 
                 let new_mesh = hittable::Mesh { ind, p, n, uv, mat_index: materials.len() - 1, bounding_box: bbox };
                 return new_mesh;

@@ -14,6 +14,7 @@ mod scenes;
 mod perlin;
 mod primitive;
 mod intersects;
+mod pdf;
 
 use consts::*;
 use material::materials::{Material, Texture};
@@ -25,16 +26,16 @@ use scenes::*;
 
 fn main() {
     let mut img = RgbImage::new(IMAGE_WIDTH, IMAGE_HEIGHT);
-    let (camera, node, objs, materials, textures) = scenes::with_everything();
+    let (camera, node, objs, lights, materials, textures) = scenes::cornell_box();
 
     if SINGLE_THREAD {
-        singlethread(&mut img, PATH, &node, &camera, &objs, &materials, &textures);
+        singlethread(&mut img, PATH, &node, &camera, &objs, &lights, &materials, &textures);
     } else {
-        multithread(img, node, camera, objs, materials, textures);
+        multithread(img, node, camera, objs, lights, materials, textures);
     }
 }
 
-fn singlethread(img: &mut image::RgbImage, path: &str, node: &BvhNode, camera: &Camera, objs: &Vec<Primitive>, materials: &Vec<Material>, textures: &Vec<Texture>) {
+fn singlethread(img: &mut image::RgbImage, path: &str, node: &BvhNode, camera: &Camera, objs: &Vec<Primitive>, lights: &Vec<usize>, materials: &Vec<Material>, textures: &Vec<Texture>) {
     if !COLS {
         let mut pixels: Vec<Vec<(f64, f64, f64, u32)>> = Vec::new();
         for _ in 0..IMAGE_HEIGHT {
@@ -56,7 +57,7 @@ fn singlethread(img: &mut image::RgbImage, path: &str, node: &BvhNode, camera: &
             let u: f64 = util::rand();
             let v: f64 = util::rand();
             let ray = camera.get_ray(u, v);
-            let res = geometry::cast_ray(objs, materials, textures, &ray, &node, MAX_DEPTH);
+            let res = geometry::cast_ray(objs, lights, materials, textures, &ray, &node, MAX_DEPTH);
             let i = (u * IMAGE_WIDTH as f64).floor() as usize;
             let j = (v * IMAGE_HEIGHT as f64).floor() as usize;
             util::increment_color(&mut pixels, j, i, &res);
@@ -71,7 +72,7 @@ fn singlethread(img: &mut image::RgbImage, path: &str, node: &BvhNode, camera: &
                     let u: f64 = (i as f64 + util::rand()) / ((IMAGE_WIDTH - 1) as f64);
                     let v: f64 = (j as f64 + util::rand()) / ((IMAGE_HEIGHT - 1) as f64);
                     let ray = camera.get_ray(u, v);
-                    let res: Vector3<f64> = geometry::cast_ray(objs, materials, textures, &ray, &node, MAX_DEPTH);
+                    let res: Vector3<f64> = geometry::cast_ray(objs, lights, materials, textures, &ray, &node, MAX_DEPTH);
                     color = color + res;
                 }
                 util::draw_color(img, i, j, &color, SAMPLES_PER_PIXEL);
@@ -84,7 +85,7 @@ fn singlethread(img: &mut image::RgbImage, path: &str, node: &BvhNode, camera: &
     img.save(path).unwrap();
 }
 
-fn multithread (img: image::RgbImage, node: BvhNode, camera: Camera, objs: Vec<Primitive>, materials: Vec<Material>, textures: Vec<Texture>) {
+fn multithread (img: image::RgbImage, node: BvhNode, camera: Camera, objs: Vec<Primitive>, lights: Vec<usize>, materials: Vec<Material>, textures: Vec<Texture>) {
     let pixels: Vec<Vec<(f64, f64, f64, u32)>> = util::make_empty_image();
 
     let pixels_mutex: Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>> = Arc::new(Mutex::new(pixels));
@@ -94,6 +95,7 @@ fn multithread (img: image::RgbImage, node: BvhNode, camera: Camera, objs: Vec<P
 
     let mut thread_vec: Vec<thread::JoinHandle<()>> = Vec::new();
     let objs_arc: Arc<Vec<Primitive>> = Arc::new(objs);
+    let lights_arc: Arc<Vec<usize>> = Arc::new(lights);
     let mats_arc: Arc<Vec<Material>> = Arc::new(materials);
     let texture_arc : Arc<Vec<Texture>> = Arc::new(textures);
 
@@ -103,6 +105,7 @@ fn multithread (img: image::RgbImage, node: BvhNode, camera: Camera, objs: Vec<P
         let pixels_clone = Arc::clone(&pixels_mutex);
         let image_clone = Arc::clone(&image_arc);
         let objs_clone= Arc::clone(&objs_arc);
+        let lights_clone = Arc::clone(&lights_arc);
         let mats_clone = Arc::clone(&mats_arc);
         let textures_clone = Arc::clone(&texture_arc);
 
@@ -119,13 +122,10 @@ fn multithread (img: image::RgbImage, node: BvhNode, camera: Camera, objs: Vec<P
                 let u: f64 = util::rand();
                 let v: f64 = util::rand();
                 let ray = camera_clone.get_ray(u, v);
-                let res = geometry::cast_ray(&objs_clone, &mats_clone, &textures_clone, &ray, &node_clone, MAX_DEPTH);
+                let res = geometry::cast_ray(&objs_clone, &lights_clone, &mats_clone, &textures_clone, &ray, &node_clone, MAX_DEPTH);
                 let i = (u * IMAGE_WIDTH as f64).floor() as usize;
                 let j = (v * IMAGE_HEIGHT as f64).floor() as usize;
-                local_img[j][i].0 += res.x;
-                local_img[j][i].1 += res.y;
-                local_img[j][i].2 += res.z;
-                local_img[j][i].3 += 1;
+                util::increment_color(&mut local_img, j, i, &res);
                 // util::thread_safe_increment_color(&pixels_clone, j, i, &res);
             }
         }));

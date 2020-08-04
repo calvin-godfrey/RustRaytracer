@@ -9,7 +9,7 @@ use crate::geometry;
 use crate::primitive::Primitive;
 
 #[allow(dead_code)]
-pub fn make_world() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<Material>, Vec<Texture>) {
+pub fn make_world() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<usize>, Vec<Material>, Vec<Texture>) {
     let from: Point3<f64> = Point3::new(13., 2.,3.);
     let to: Point3<f64> = Point3::new(0., 0., 0.0);
     let up: Vector3<f64> = Vector3::new(0., 1., 0.);
@@ -63,13 +63,15 @@ pub fn make_world() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<Material>
     // world.push(Primitive::new_sphere(Point3::new(4., 1., 0.), 1., Arc::new(Material::new_metal(Vector3::new(178.5, 153., 127.5), 0.05))));
 
     let len = world.len();
-    let node = BvhNode::new(&mut world, 0, len, 0., 0.);
+    let mut indices: Vec<usize> = (0usize..len).collect();
+    let node = BvhNode::new(&world, &mut indices, 0, len, 0., 0.);
 
-    (camera, node, world, materials, textures)
+    let lights = vec![];
+    (camera, node, world, lights, materials, textures)
 }
 
 #[allow(dead_code)]
-pub fn make_world_moving() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<Material>, Vec<Texture>) {
+pub fn make_world_moving() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<usize>, Vec<Material>, Vec<Texture>) {
     let from: Point3<f64> = Point3::new(13., 2.,3.);
     let to: Point3<f64> = Point3::new(0., 0., 0.0);
     let up: Vector3<f64> = Vector3::new(0., 1., 0.);
@@ -127,13 +129,14 @@ pub fn make_world_moving() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<Ma
     world.push(Primitive::new_sphere(Point3::new(4., 1., 0.), 1., materials.len() - 1));
 
     let len = world.len();
-    let node = BvhNode::new(&mut world, 0, len, 0., 0.);
-
-    (camera, node, world, materials, textures)
+    let mut indices: Vec<usize> = (0usize..len).collect();
+    let node = BvhNode::new(&world, &mut indices, 0, len, 0., 0.);
+    let lights = vec![];
+    (camera, node, world, lights, materials, textures)
 }
 
 #[allow(dead_code)]
-pub fn sphere_cat_bvh() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<Material>, Vec<Texture>) {
+pub fn sphere_cat_bvh() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<usize>, Vec<Material>, Vec<Texture>) {
     let from = Point3::new(-200. * 0.3, -100. * 0.3, 100. * 0.6);
     let to = Point3::new(50., -35., 0.);
     let up = Vector3::new(0., 1., 0.);
@@ -163,12 +166,14 @@ pub fn sphere_cat_bvh() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<Mater
         world.push(tri);
     }
     let len = world.len();
-    let node: BvhNode = BvhNode::new(&mut world, 0, len, 0., 0.);
-    (camera, node, world, materials, textures)
+    let mut indices: Vec<usize> = (0usize..len).collect();
+    let node: BvhNode = BvhNode::new(&world, &mut indices, 0, len, 0., 0.);
+    let lights = vec![];
+    (camera, node, world, lights, materials, textures)
 }
 
 #[allow(dead_code)]
-pub fn cornell_box() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<Material>, Vec<Texture>) {
+pub fn cornell_box() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<usize>, Vec<Material>, Vec<Texture>) {
 
     let from = Point3::new(278., 278., -800.);
     let to = Point3::new(278., 278., 0.);
@@ -179,10 +184,10 @@ pub fn cornell_box() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<Material
     let mut vec: Vec<Primitive> = Vec::new();
     let mut materials: Vec<Material> = Vec::new();
     let mut textures: Vec<Texture> = Vec::new();
-    textures.push(Texture::new_solid_color(Vector3::new(165.75, 12.75, 12.75))); // red
-    textures.push(Texture::new_solid_color(Vector3::new(186.15, 186.15, 186.15))); // white
-    textures.push(Texture::new_solid_color(Vector3::new(30.6, 114.75, 38.25))); // green
-    textures.push(Texture::new_solid_color(Vector3::new(3825., 3825., 3825.))); // light
+    textures.push(Texture::new_solid_color(Vector3::new(0.65, 0.05, 0.05))); // red
+    textures.push(Texture::new_solid_color(Vector3::new(0.73, 0.73, 0.73))); // white
+    textures.push(Texture::new_solid_color(Vector3::new(0.12, 0.45, 0.15))); // green
+    textures.push(Texture::new_solid_color(Vector3::new(15., 15., 15.))); // light
 
     materials.push(Material::new_lambertian(0));
     materials.push(Material::new_lambertian(1));
@@ -191,7 +196,7 @@ pub fn cornell_box() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<Material
     
     vec.push(Primitive::new_flip_face(Box::new(Primitive::new_yz_rect(0., 0., 555., 555., 555., 2))));
     vec.push(Primitive::new_yz_rect(0., 0., 555., 555., 0., 0));
-    vec.push(Primitive::new_xz_rect(213., 227., 343., 332., 554.9, 3));
+    vec.push(Primitive::new_flip_face(Box::new(Primitive::new_xz_rect(213., 227., 343., 332., 554.9, 3))));
     vec.push(Primitive::new_xz_rect(0., 0., 555., 555., 0., 1));
     vec.push(Primitive::new_flip_face(Box::new(Primitive::new_xz_rect(0., 0., 555., 555., 555., 1))));
     vec.push(Primitive::new_flip_face(Box::new(Primitive::new_xy_rect(0., 0., 555., 555., 555., 1))));
@@ -212,13 +217,16 @@ pub fn cornell_box() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<Material
     vec.extend(cube2.get_sides());
     
     let len = vec.len();
+    let mut indices: Vec<usize> = (0usize..len).collect();
+
+    let lights = vec![2usize];
     
-    let node = BvhNode::new(&mut vec, 0, len, 0., 1.);
-    (camera, node, vec, materials, textures)
+    let node = BvhNode::new(&vec, &mut indices, 0, len, 0., 1.);
+    (camera, node, vec, lights, materials, textures)
 }
 
 #[allow(dead_code)]
-pub fn smokey_box() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<Material>, Vec<Texture>) {
+pub fn smokey_box() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<usize>, Vec<Material>, Vec<Texture>) {
 
     let from = Point3::new(278., 278., -800.);
     let to = Point3::new(278., 278., 0.);
@@ -254,13 +262,15 @@ pub fn smokey_box() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<Material>
     vec.push(Primitive::new_medium(Box::new(Primitive::new_sphere(Point3::new(347.5, 92.5, 277.5), 92.5, 5)), 0.01, 5));
     
     let len = vec.len();
-    
-    let node = BvhNode::new(&mut vec, 0, len, 0., 1.);
-    (camera, node, vec, materials, textures)
+    let mut indices: Vec<usize> = (0usize..len).collect();
+
+    let node = BvhNode::new(&vec, &mut indices, 0, len, 0., 1.);
+    let lights = vec![2usize];
+    (camera, node, vec, lights, materials, textures)
 }
 
 #[allow(dead_code)]
-pub fn with_everything() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<Material>, Vec<Texture>) {
+pub fn with_everything() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<usize>, Vec<Material>, Vec<Texture>) {
     let from = Point3::new(478., 278., -600.);
     let to = Point3::new(278., 278., 0.);
     let up = Vector3::new(0., 1., 0.);
@@ -285,9 +295,11 @@ pub fn with_everything() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<Mate
             objs.extend(cube.get_sides());
         }
     }
+
     textures.push(Texture::new_solid_color(Vector3::new(1785., 1785., 1785.))); // light
     materials.push(Material::new_diffuse(textures.len() - 1));
     objs.push(Primitive::new_xz_rect(123., 147., 423., 412., 554., materials.len() - 1));
+    let lights = vec![objs.len() - 1];
 
     textures.push(Texture::new_solid_color(Vector3::new(178.5, 76.5, 25.5))); // moving sphere
     materials.push(Material::new_lambertian(textures.len() - 1));
@@ -330,5 +342,6 @@ pub fn with_everything() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<Mate
     }
 
     let len = objs.len();
-    (camera, BvhNode::new(&mut objs, 0, len, 0., 1.), objs, materials, textures)
+    let mut indices: Vec<usize> = (0usize..len).collect();
+    (camera, BvhNode::new(&objs, &mut indices, 0, len, 0., 1.), objs, lights, materials, textures)
 }
