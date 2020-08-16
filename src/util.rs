@@ -99,6 +99,15 @@ pub fn increment_color(arr: &mut Vec<Vec<(f64, f64, f64, u32)>>, i: usize, j: us
 }
 
 #[allow(dead_code)]
+pub fn thread_safe_write_pixel(arr: &Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>>, i: usize, j: usize, color: (f64, f64, f64, u32)) {
+    let mut data = arr.lock().unwrap();
+    data[i][j].0 += if color.0 == f64::NAN { 0. } else { color.0 };
+    data[i][j].1 += if color.1 == f64::NAN { 0. } else { color.1 };
+    data[i][j].2 += if color.2 == f64::NAN { 0. } else { color.2 };
+    data[i][j].3 += color.3;
+}
+
+#[allow(dead_code)]
 pub fn thread_safe_increment_color(arr: &Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>>, i: usize, j: usize, color: &Vector3<f64>) {
     let mut data = arr.lock().unwrap();
     data[i][j].0 += if color.x == f64::NAN { 0. } else { color.x };
@@ -118,6 +127,22 @@ pub fn thread_safe_update_image(arr: &Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>>
             data[i][j].3 += n;
         }
     }
+}
+
+pub fn thread_safe_draw_picture(img: &Mutex<image::RgbImage>, pixels: &Mutex<Vec<Vec<(f64, f64, f64, u32)>>>, path: &str) {
+    let mut img_guard = img.lock().unwrap();
+    let pixels_guard = pixels.lock().unwrap();
+
+    for i in 0..img_guard.height() {
+        let w = i as usize;
+        for j in 0..img_guard.width() {
+            let (r, g, b, n) = pixels_guard[w][j as usize];
+            let pt = Point3::new(r / n as f64, g / n as f64, b / n as f64);
+            let color = point_to_color(&pt, 1. / GAMMA, 1);
+            img_guard.put_pixel(j, i, color);
+        }
+    }
+    img_guard.save(path).unwrap();
 }
 
 pub fn refract(vec: &Unit<Vector3<f64>>, n: &Unit<Vector3<f64>>, eta: f64) -> Vector3<f64> {
@@ -161,26 +186,10 @@ pub fn schlick(cosine: f64, index: f64) -> f64 {
     return r0 + (1. - r0) * (1. - cosine).powf(5.);
 }
 
-pub fn thread_safe_draw_picture(img: &Mutex<image::RgbImage>, pixels: &Mutex<Vec<Vec<(f64, f64, f64, u32)>>>, path: &str) {
-    let mut img_guard = img.lock().unwrap();
-    let pixels_guard = pixels.lock().unwrap();
-
-    for i in 0..img_guard.height() {
-        let w = i as usize;
-        for j in 0..img_guard.width() {
-            let (r, g, b, n) = pixels_guard[w][j as usize];
-            let pt = Point3::new(r / n as f64, g / n as f64, b / n as f64);
-            let color = point_to_color(&pt, 1. / GAMMA, 1);
-            img_guard.put_pixel(j, i, color);
-        }
-    }
-    img_guard.save(path).unwrap();
-}
-
 #[allow(dead_code)]
 pub fn get_sky(ray: &geometry::Ray) -> Vector3<f64> {
     let white = Rgb([255u8, 255u8, 255u8]);
-    let blue = Rgb([80u8, 159u8, 255u8]);
+    let blue = Rgb([140u8, 159u8, 185u8]);
     let unit: Unit<Vector3<f64>> = Unit::new_normalize(ray.dir);
     let color = gradient(&white, &blue, 0.5 * (1.0 + unit.as_ref().y));
     return Vector3::new(color[0] as f64 * INV_COL_MAX, color[1] as f64 * INV_COL_MAX, color[2] as f64 * INV_COL_MAX);
@@ -219,11 +228,11 @@ pub fn get_new_box(bbox: hittable::BoundingBox, t: &Arc<Projective3<f64>>) -> hi
     hittable::BoundingBox::new(min, max)
 }
 
-pub fn make_empty_image() -> Vec<Vec<(f64, f64, f64, u32)>> {
+pub fn make_empty_image(height: usize, width: usize) -> Vec<Vec<(f64, f64, f64, u32)>> {
     let mut pixels: Vec<Vec<(f64, f64, f64, u32)>> = Vec::new();
-    for _ in 0..IMAGE_HEIGHT {
+    for _ in 0..height {
         let mut temp: Vec<(f64, f64, f64, u32)> = Vec::new();
-        for _ in 0..IMAGE_WIDTH {
+        for _ in 0..width {
             temp.push((0., 0., 0., 0u32));
         }
         pixels.push(temp);

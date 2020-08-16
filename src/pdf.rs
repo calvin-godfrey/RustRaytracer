@@ -12,6 +12,7 @@ pub enum PDF {
     MixturePdf { a: Box<PDF>, b: Box<PDF> }
 }
 
+#[allow(dead_code)]
 impl PDF {
     #[allow(unused_variables)]
     pub fn value(pdf: &PDF, objs: &Vec<Primitive>, dir: &Vector3<f64>) -> f64 {

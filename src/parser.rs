@@ -5,7 +5,8 @@ use crate::hittable;
 use crate::material::materials::{Texture, Material};
 use crate::consts::*;
 
-pub fn parse_obj(materials: &mut Vec<Material>, textures: &mut Vec<Texture>, path: &str, trans: Projective3<f64>) -> hittable::Mesh {
+#[allow(unused_variables)]
+pub fn parse_obj(materials: &mut Vec<Material>, textures: &mut Vec<Texture>, path: &str, trans: Projective3<f64>, mat: Material) -> hittable::Mesh {
     let obj_res: Result<(Vec<tobj::Model>, Vec<tobj::Material>), tobj::LoadError> = tobj::load_obj(path, true);
     let mut ind: Vec<usize> = Vec::new();
     let mut p: Vec<Point3<f64>> = Vec::new();
@@ -57,9 +58,12 @@ pub fn parse_obj(materials: &mut Vec<Material>, textures: &mut Vec<Texture>, pat
             }
 
             if let Some(id) = mesh.material_id {
-                let mesh_mat: &tobj::Material = &mats[id];
-                // materials.push(Material::new_metal(Vector3::new(0.8, 0.8, 0.2), 1.));
-
+                // let mesh_mat: &tobj::Material = &mats[id]; // TODO: use this
+                materials.push(mat);
+                let new_mesh = hittable::Mesh { ind, p, n, uv, mat_index: materials.len() - 1, bounding_box: bbox };
+                return new_mesh;
+            } else {
+                materials.push(mat);
                 let new_mesh = hittable::Mesh { ind, p, n, uv, mat_index: materials.len() - 1, bounding_box: bbox };
                 return new_mesh;
             }
@@ -68,7 +72,4 @@ pub fn parse_obj(materials: &mut Vec<Material>, textures: &mut Vec<Texture>, pat
             panic!("Failed to parse obj {}", path);
         }
     }
-
-    // random default, doesn't matter what it is
-    hittable::Mesh { ind: Vec::new(), p: Vec::new(), n: Vec::new(), uv: Vec::new(), mat_index: 0, bounding_box: None }
 }

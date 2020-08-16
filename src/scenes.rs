@@ -150,12 +150,12 @@ pub fn sphere_cat_bvh() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<usize
     let mut materials: Vec<Material> = Vec::new();
     let mut textures: Vec<Texture> = Vec::new();
 
-    let mesh = Mesh::new(&mut materials, &mut textures, "data/cat/cat.obj", Projective3::from_matrix_unchecked(transform));
+    let mesh = Mesh::new(&mut materials, &mut textures, "data/cat/cat.obj", Projective3::from_matrix_unchecked(transform), Material::new_dielectric(1.4));
     let arc_mesh = Arc::new(mesh);
     let triangles = Mesh::generate_triangles(&arc_mesh);
 
-    materials.push(Material::new_metal(Vector3::new(178.5, 153., 127.5), 0.));
-    materials.push(Material::new_metal(Vector3::new(128., 153., 150.), 0.1));
+    materials.push(Material::new_metal(Vector3::new(178.5 / 256., 153. / 256., 127.5 / 256.), 0.0));
+    materials.push(Material::new_metal(Vector3::new(128.0 / 256., 153. / 256., 150.0 / 256.), 0.1));
 
     let sphere = Primitive::new_sphere(Point3::new(70., -20., 10.), 50., 1);
     let other = Primitive::new_sphere(Point3::new(0., -1000., 0.), 950., 2);
@@ -344,4 +344,41 @@ pub fn with_everything() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<usiz
     let len = objs.len();
     let mut indices: Vec<usize> = (0usize..len).collect();
     (camera, BvhNode::new(&objs, &mut indices, 0, len, 0., 1.), objs, lights, materials, textures)
+}
+
+#[allow(dead_code)]
+pub fn dragon() -> (geometry::Camera, BvhNode, Vec<Primitive>, Vec<usize>, Vec<Material>, Vec<Texture>) {
+    let from: Point3<f64> = Point3::new(0.75, 0.5, -0.51);
+    let to: Point3<f64> = Point3::new(0., -0.15, -0.08);
+    let up: Vector3<f64> = Vector3::new(0., 1., 0.);
+
+    let camera = geometry::Camera::new(from, to, up, ASPECT_RATIO, 70., 0.0, 10.);
+
+    let mut world: Vec<Primitive> = Vec::new();
+    let mut textures: Vec<Texture> = Vec::new();
+    let mut materials: Vec<Material> = Vec::new();
+
+    let light_gray = Vector3::new(0.4, 0.15, 0.15).scale(1.5);
+    let dark_gray = Vector3::new(0.15, 0.15, 0.4).scale(1.5);
+    textures.push(Texture::new_checkered(Box::new(Texture::new_solid_color(light_gray)), Box::new(Texture::new_solid_color(dark_gray)), 1.));
+    materials.push(Material::new_lambertian(0));
+    world.push(Primitive::new_xz_rect(-10000., -10000., 10000., 10000., -0.5, 0));
+
+    textures.push(Texture::new_solid_color(Vector3::new(0.7, 0.4, 1.)));
+    // let dragon_mat = Material::new_diffuse(1);
+    let dragon_mat = Material::new_dielectric(1.4);
+    let mesh = Mesh::new(&mut materials, &mut textures, "data/dragon/dragon.obj", Projective3::identity(), dragon_mat);
+
+    let triangles = Mesh::generate_triangles(&Arc::new(mesh));
+    for tri in triangles {
+        world.push(tri);
+    }
+
+    // textures.push(Texture::new_solid_color(Vector3::new(7., 7., 7.)));
+    // materials.push(Material::new_diffuse(2));
+    // world.push(Primitive::new_flip_face(Box::new(Primitive::new_xy_rect(-5., 0., 5., 5., 2., 2))));
+
+    let len = world.len();
+    let mut indices: Vec<usize> = (0usize..len).collect();
+    (camera, BvhNode::new(&world, &mut indices, 0, len, 0., 1.), world, Vec::new(), materials, textures)
 }

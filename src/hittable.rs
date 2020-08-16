@@ -37,8 +37,8 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub fn new(materials: &mut Vec<Material>, textures: &mut Vec<Texture>, path: &str, trans: Projective3<f64>) -> Self {
-        parser::parse_obj(materials, textures, path, trans)
+    pub fn new(materials: &mut Vec<Material>, textures: &mut Vec<Texture>, path: &str, trans: Projective3<f64>, mat: Material) -> Self {
+        parser::parse_obj(materials, textures, path, trans, mat)
     }
 
     pub fn generate_triangles(mesh: &Arc<Self>) -> Vec<Primitive> {
@@ -321,9 +321,3 @@ impl Cube {
         vec![z0, z1, y0, y1, x0, x1]
     }
 }
-
-// to please compiler. It's needed for multithreading even though these traits are never used
-// unsafe impl Send for Primitive {}
-// unsafe impl Sync for Primitive {}
-// unsafe impl Send for BvhNode {}
-// unsafe impl Sync for BvhNode {}

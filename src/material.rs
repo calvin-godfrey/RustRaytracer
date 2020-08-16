@@ -4,9 +4,8 @@ pub mod materials {
     use std::sync::Arc;
     use crate::util::*;
     use crate::hittable::HitRecord;
-    use crate::geometry::{ONB, Ray};
+    use crate::geometry::Ray;
     use crate::perlin;
-    use crate::consts::*;
     use image::RgbImage;
 
     #[derive(Copy, Clone)]
@@ -30,15 +29,13 @@ pub mod materials {
     }
 
     impl Material {
-        pub fn scatter(materials: &Vec<Material>, index: usize, textures: &Vec<Texture>, ray: &Ray, hit_record: &HitRecord) -> Option<(Ray, Vector3<f64>, f64)> {
+        pub fn scatter(materials: &Vec<Material>, index: usize, textures: &Vec<Texture>, ray: &Ray, hit_record: &HitRecord) -> Option<(Ray, Vector3<f64>)> {
             match &materials[index] {
                 Material::Lambertian { texture_index } => {
-                    let onb = ONB::new_from_vec(&hit_record.n);
-                    let dir: Vector3<f64> = onb.get_local_vec(&rand_cosine_dir());
-                    let new_ray = Ray::new_time(hit_record.p, dir, ray.time);
+                    let dir: Vector3<f64> = hit_record.n.as_ref() + rand_in_unit_sphere();
+                    let ray = Ray::new_time(hit_record.p, dir, ray.time);
                     let color = Texture::value(textures, *texture_index, hit_record.uv.x, hit_record.uv.y, &hit_record.p);
-                    let pdf = onb.w().dot(&new_ray.dir) / PI;
-                    Some((new_ray, color, pdf))
+                    Some((ray, color))
                 }
                 Material::Metal { albedo, roughness } => {
                     let refl: Vector3<f64> = reflect(&ray.dir, &hit_record.n);
@@ -46,7 +43,7 @@ pub mod materials {
                     if refl.dot(hit_record.n.as_ref()) <= 0. {
                         None
                     } else {
-                        Some((new_ray, *albedo, 0.))
+                        Some((new_ray, *albedo))
                     }
                 }
                 Material::Dielectric { index } => {
@@ -56,28 +53,14 @@ pub mod materials {
                     let sint = (1. - cost * cost).sqrt();
                     let prob = schlick(cost, etai);
                     let new_dir: Vector3<f64> = if etai * sint > 1. || rand() < prob { reflect(unit_dir.as_ref(), &hit_record.n) } else { refract(&unit_dir, &hit_record.n, etai) };
-                    return Some((Ray::new_time(hit_record.p, new_dir, ray.time), Vector3::new(255., 255., 255.), 0.));
+                    return Some((Ray::new_time(hit_record.p, new_dir, ray.time), Vector3::new(1., 1., 1.)));
                 }
                 Material::DiffuseLight { texture_index: _ } => { None }
                 Material::Isotropic { texture_index } => {
                     let new_ray = Ray::new_time(hit_record.p, rand_in_unit_sphere(), ray.time);
                     let color = Texture::value(textures, *texture_index, hit_record.uv.x, hit_record.uv.y, &hit_record.p);
-                    Some((new_ray, color, 0.))
+                    Some((new_ray, color))
                 }
-            }
-        }
-
-        #[allow(unused_variables)]
-        pub fn scattering_pdf(materials: &Vec<Material>, index: usize, textures: &Vec<Texture>, ray: &Ray, hit_record: &HitRecord, out_ray: &Ray) -> f64 {
-            match &materials[index] {
-                Material::Lambertian { texture_index } => {
-                    let cos = hit_record.n.dot(&Unit::new_normalize(out_ray.dir));
-                    (cos/PI).max(0.)
-                }
-                Material::Metal { albedo, roughness } => { 0. }
-                Material::Dielectric { index } => { 0. }
-                Material::DiffuseLight { texture_index } => { 0. }
-                Material::Isotropic { texture_index } => { 0. }
             }
         }
 

@@ -7,13 +7,13 @@ use crate::consts::*;
 use crate::util;
 use crate::material::materials::{Texture, Material};
 use crate::primitive::Primitive;
-use crate::pdf::PDF;
 
 #[derive(Copy, Clone)]
 pub struct ONB {
     axis: [Unit<Vector3<f64>>; 3],
 }
 
+#[allow(dead_code)]
 impl ONB {
     pub fn u(&self) -> Unit<Vector3<f64>> { self.axis[0] }
     pub fn v(&self) -> Unit<Vector3<f64>> { self.axis[1] }
@@ -130,25 +130,10 @@ pub fn cast_ray(objs: &Vec<Primitive>, lights: &Vec<usize>, materials: &Vec<Mate
             // if !record.front { // only front-facing objects
             //     return if AMBIENT_LIGHT { util::get_sky(ray) } else { util::get_background(ray) }
             // }
-            let cos_pdf = PDF::new_cos(&record.n);
-            let pdf = if lights.len() == 0 {
-                cos_pdf
-            } else {
-                let index = util::rand_int(0, lights.len() as i32 - 1);
-                let light_pdf = PDF::new_hittable(lights[index as usize], record.p);
-                PDF::new_mixture(cos_pdf, light_pdf)
-            };
-
             match pair {
-                Some((new_ray, albedo, pdf_val)) => {
-                    let new_ray = Ray::new_time(record.p, PDF::generate(&pdf, &objs), ray.time);
-                    let pdf_val = PDF::value(&pdf, &objs, &new_ray.dir);
-                    if pdf_val == 0. {
-                        return emitted;
-                    }
+                Some((new_ray, albedo)) => {
                     let col = cast_ray(objs, lights, materials, textures, &new_ray, node, depth - 1);
-                    let albedo_scale = Material::scattering_pdf(materials, record.mat_index, textures, ray, &record, &new_ray);
-                    return col.scale(1. / pdf_val).component_mul(&albedo.scale(albedo_scale)) + emitted;
+                    return col.component_mul(&albedo) + emitted;
                 },
                 None => Vector3::new(0.0, 0.0, 0.0) // should never happen
             }
