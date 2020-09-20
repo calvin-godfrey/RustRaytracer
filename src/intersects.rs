@@ -24,11 +24,15 @@ pub fn xy_rect_intersect(x0: f64, y0: f64, x1: f64, y1: f64, k: f64, mat_index: 
     }
     let uv = Vector2::new((x-x0)/(x1-x0), (y-y0)/(y1-y0));
     let mut p = transformed_ray.at(t);
+    let mut dpdu = Vector3::new(1., 0., 0.);
+    let mut dpdv = Vector3::new(0., 1., 0.);
     if transform.is_some() {
-        p = transform.as_ref().unwrap().transform_point(&p);
+        let trans = transform.as_ref().unwrap();
+        p = trans.transform_point(&p);
+        dpdu = trans.transform_vector(&dpdu);
+        dpdv = trans.transform_vector(&dpdv);
     }
-    let mut record = HitRecord::new(p, uv, -ray.dir, Vector3::new(1., 0., 0.), Vector3::new(0., 1., 0.), 
-                                               Vector3::new(0., 0., 0.), Vector3::new(0., 0., 0.), t, mat_index);
+    let mut record = HitRecord::new(p, uv, -ray.dir, dpdu, dpdv, util::black(), util::black(), t, mat_index);
     record.set_front(&ray); // p and n were transformed to world space, so use the original ray
     Some(record)
 }
@@ -50,11 +54,15 @@ pub fn xz_rect_intersect(x0: f64, z0: f64, x1: f64, z1: f64, k: f64, mat_index: 
     }
     let uv = Vector2::new((x-x0)/(x1-x0), (z-z0)/(z1-z0));
     let mut p = transformed_ray.at(t);
+    let mut dpdu = Vector3::new(1., 0., 0.);
+    let mut dpdv = Vector3::new(0., 0., 1.);
     if transform.is_some() {
-        p = transform.as_ref().unwrap().transform_point(&p);
+        let trans = transform.as_ref().unwrap();
+        p = trans.transform_point(&p);
+        dpdu = trans.transform_vector(&dpdu);
+        dpdv = trans.transform_vector(&dpdv);
     }
-    let mut record = HitRecord::new(p, uv, -ray.dir, Vector3::new(1., 0., 0.), Vector3::new(0., 0., 1.),
-                                               Vector3::new(0., 0., 0.), Vector3::new(0., 0., 0.), t, mat_index);
+    let mut record = HitRecord::new(p, uv, -ray.dir, dpdu, dpdv, util::black(), util::black(), t, mat_index);
     record.set_front(&ray);
     Some(record)
 }
@@ -76,11 +84,15 @@ pub fn yz_rect_intersect(y0: f64, z0: f64, y1: f64, z1: f64, k: f64, mat_index: 
     }
     let uv = Vector2::new((y-y0)/(y1-y0), (z-z0)/(z1-z0));
     let mut p = transformed_ray.at(t);
+    let mut dpdu = Vector3::new(0., 1., 0.);
+    let mut dpdv = Vector3::new(0., 0., 1.);
     if transform.is_some() {
-        p = transform.as_ref().unwrap().transform_point(&p);
+        let trans = transform.as_ref().unwrap();
+        p = trans.transform_point(&p);
+        dpdu = trans.transform_vector(&dpdu);
+        dpdv = trans.transform_vector(&dpdv);
     }
-    let mut record = HitRecord::new(p, uv, -ray.dir, Vector3::new(0., 1., 0.), Vector3::new(0., 0., 1.),
-                                               Vector3::new(0., 0., 0.), Vector3::new(0., 0., 0.), t, mat_index);
+    let mut record = HitRecord::new(p, uv, -ray.dir, dpdu, dpdv, util::black(), util::black(), t, mat_index);
     record.set_front(&ray);
     Some(record)
 }
