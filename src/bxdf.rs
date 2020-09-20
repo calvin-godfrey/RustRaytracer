@@ -152,7 +152,7 @@ impl Bxdf {
             // for arbitrary pair of directions, there will be no specular reflection (excluding the infinitesimal chance that the direction is right)
             Bxdf::SpecularReflection { color, fresnel, bxdf_type } => { util::black() }
             Bxdf::SpecularTransmission { color, eta_a, eta_b, fresnel, mode, bxdf_type } => {util::black()}
-            Bxdf::LambertianReflection { color, bxdf_type } => { *color }
+            Bxdf::LambertianReflection { color, bxdf_type } => { *color}// * INV_PI }
             Bxdf::OrenNayer { color, a, b, bxdf_type } => {
                 let sin_theta_i = sin_theta(wi);
                 let sin_theta_o = sin_theta(wo);

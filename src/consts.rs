@@ -6,7 +6,7 @@ pub const SMALL: f64 = 0.001;
 pub const INV_COL_MAX: f64 = 1. / 256.;
 // Defining rendering quantities
 pub const GAMMA: f64 = 1.8;
-pub const IMAGE_WIDTH: u32 = 240;
+pub const IMAGE_WIDTH: u32 = 480;
 pub const ASPECT_RATIO: f64 = 9.0 / 9.0;
 pub const SAMPLES_PER_PIXEL: u32 = 1000;
 pub const MAX_DEPTH: u32 = 50;
