@@ -1,9 +1,9 @@
 use image::{Rgb, RgbImage};
 use nalgebra::geometry::{Projective3, Point3};
-use nalgebra::base::{Unit, Vector3, Vector2};
+use nalgebra::base::{Unit, Vector3};
 use rand::prelude::*;
 use rand::distributions::Standard;
-use std::sync::{Mutex, Arc};
+use std::{sync::{Mutex, Arc}, collections::HashSet};
 
 use crate::consts::*;
 use crate::geometry;
@@ -78,17 +78,37 @@ pub fn rand_vector(min: f64, max: f64) -> Vector3<f64> {
 pub fn rand_cosine_dir() -> Vector3<f64> {
     let r1 = rand();
     let r2 = rand();
-    let z = (1. - r2).sqrt();
-
-    let phi = 2. * PI * r1;
-    let x = phi.cos() * r2.sqrt();
-    let y = phi.sin() * r2.sqrt();
+    let u1 = 2. * r1 - 1.;
+    let u2 = 2. * r2 - 1.;
+    if u1 == 0. && u2 == 0. {
+        return Vector3::new(0., 0., 1.);
+    }
+    let theta: f64;
+    let r: f64;
+    if u1.abs() > u2.abs() {
+        r = u1;
+        theta = PI / 4. * (u2 / u1);
+    } else {
+        r = u2;
+        theta = PI / 2. - PI / 4. * (u1 / u2);
+    }
+    let x = r * theta.cos();
+    let y = r * theta.sin();
+    let z = (0f64.max(1. - x * x - y * y)).sqrt();
     Vector3::new(x, y, z)
+}
+
+pub fn permute_vec(vec: &Vector3<f64>, x: usize, y: usize, z: usize) -> Vector3<f64> {
+    Vector3::new(vec[x], vec[y], vec[z])
+}
+
+pub fn permute_pt(vec: &Point3<f64>, x: usize, y: usize, z: usize) -> Point3<f64> {
+    Point3::new(vec[x], vec[y], vec[z])
 }
 
 pub fn reflect(v: &Vector3<f64>, n: &Unit<Vector3<f64>>) -> Vector3<f64> {
     let scale = 2. * v.dot(n);
-    v - n.as_ref().scale(scale)
+    -v + n.as_ref().scale(scale)
 }
 
 pub fn increment_color(arr: &mut Vec<Vec<(f64, f64, f64, u32)>>, i: usize, j: usize, color: &Vector3<f64>) {
@@ -129,31 +149,58 @@ pub fn thread_safe_update_image(arr: &Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>>
     }
 }
 
-pub fn thread_safe_draw_picture(img: &Mutex<image::RgbImage>, pixels: &Mutex<Vec<Vec<(f64, f64, f64, u32)>>>, path: &str) {
+pub fn thread_safe_draw_picture(img: &Mutex<image::RgbImage>, pixels: &Mutex<Vec<Vec<(f64, f64, f64, u32)>>>, changed_tiles: &HashSet<(usize, usize)>, path: &str) {
     let mut img_guard = img.lock().unwrap();
     let pixels_guard = pixels.lock().unwrap();
 
     for i in 0..img_guard.height() {
         let w = i as usize;
         for j in 0..img_guard.width() {
+            let tile_x: usize = (j / 16) as usize;
+            let tile_y: usize = (i / 16) as usize;
             let (r, g, b, n) = pixels_guard[w][j as usize];
             let pt = Point3::new(r / n as f64, g / n as f64, b / n as f64);
-            let color = point_to_color(&pt, 1. / GAMMA, 1);
+            let mut color = point_to_color(&pt, 1. / GAMMA, 1);
+            if changed_tiles.contains(&(tile_x, tile_y)) {
+                let mod_x: usize = (j % 16) as usize;
+                let mod_y: usize = (i % 16) as usize;
+                if (mod_x == 0 && (mod_y < TILE_HEIGHT as usize / 4 || mod_y > 3 * TILE_HEIGHT as usize / 4)) ||
+                   (mod_x == TILE_WIDTH as usize - 1 && (mod_y < TILE_HEIGHT as usize / 4 || mod_y > 3 * TILE_HEIGHT as usize / 4)) ||
+                   (mod_y == 0 && (mod_x < TILE_WIDTH as usize / 4 || mod_x > 3 * TILE_WIDTH as usize / 4)) ||
+                   (mod_y == TILE_WIDTH as usize - 1 && (mod_x < TILE_WIDTH as usize / 4 || mod_x > 3 * TILE_WIDTH as usize / 4)) {
+                       color = Rgb([255, 211, 0]);
+                   }
+            }
             img_guard.put_pixel(j, i, color);
         }
     }
-    img_guard.save(path).unwrap();
+    let res = img_guard.save(path);
+    match res {
+        Ok(_) => {}
+        Err(_) => {
+            std::thread::sleep(std::time::Duration::from_secs(1)); // just wait and try again
+            img_guard.save(path).unwrap();
+        }
+    }
 }
 
-pub fn refract(vec: &Unit<Vector3<f64>>, n: &Unit<Vector3<f64>>, eta: f64) -> Vector3<f64> {
-    let cost = -vec.dot(n);
-    let out_para = (vec.as_ref() + n.as_ref().scale(cost)).scale(eta);
-    let out_perp = -n.scale((1. - out_para.dot(&out_para)).sqrt());
-    out_para + out_perp
+pub fn refract(vec: &Vector3<f64>, n: &Unit<Vector3<f64>>, eta: f64) -> Option<Vector3<f64>> {
+    // let cost = -vec.dot(n);
+    // let out_para = (vec.as_ref() + n.as_ref().scale(cost)).scale(eta);
+    // let out_perp = -n.scale((1. - out_para.dot(&out_para)).sqrt());
+    // out_para + out_perp
+    let cos_theta_i = n.dot(vec) / vec.magnitude(); // make sure cos_theta_i is in [0, 1]
+    let sin2_theta_i = 0f64.max(1f64 - cos_theta_i * cos_theta_i);
+    let sin2_theta_t = eta * eta * sin2_theta_i;
+    if sin2_theta_t >= 1. {
+        return None;
+    }
+    let cos_theta_t = (1f64 - sin2_theta_t).sqrt();
+    return Some(eta * -vec + (eta * cos_theta_i - cos_theta_t) * Vector3::new(n.x, n.y, n.z));
 }
 
 #[allow(dead_code)]
-pub fn draw_picture(image: &mut RgbImage, pixels: &Vec<Vec<(f64, f64, f64, u32)>>, path: &str) {
+pub fn draw_picture(image: &mut RgbImage, pixels: &Vec<Vec<(f64, f64, f64, u32)>>, path: &String) {
     for i in 0..image.height() {
         let w = i as usize;
         for j in 0..image.width() {
@@ -180,12 +227,6 @@ fn point_to_color(vec: &Point3<f64>, gamma: f64, samples: u32) -> Rgb<u8> {
 
 }
 
-pub fn schlick(cosine: f64, index: f64) -> f64 {
-    let r0 = (1. - index) / (1. + index);
-    let r0 = r0 * r0;
-    return r0 + (1. - r0) * (1. - cosine).powf(5.);
-}
-
 #[allow(dead_code)]
 pub fn get_sky(ray: &geometry::Ray) -> Vector3<f64> {
     let white = Rgb([255u8, 255u8, 255u8]);
@@ -196,14 +237,6 @@ pub fn get_sky(ray: &geometry::Ray) -> Vector3<f64> {
 }
 
 pub fn get_background(_ray: &geometry::Ray) -> Vector3<f64> {Vector3::new(0., 0., 0.)}
-
-pub fn get_sphere_uv(p: Vector3<f64>, record: &mut hittable::HitRecord) {
-    let phi = p.z.atan2(p.x);
-    let theta = p.y.asin();
-    let u = 1. - (phi + PI) / (2. * PI);
-    let v = (theta + PI / 2.) / PI;
-    record.uv = Vector2::new(u, v);
-}
 
 pub fn get_new_box(bbox: hittable::BoundingBox, t: &Arc<Projective3<f64>>) -> hittable::BoundingBox {
     let mut min: Point3<f64> = Point3::new(INFINITY, INFINITY, INFINITY);
@@ -267,3 +300,84 @@ pub fn box_x_compare(a: &Primitive, b: &Primitive) -> std::cmp::Ordering { box_c
 pub fn box_y_compare(a: &Primitive, b: &Primitive) -> std::cmp::Ordering { box_compare(a, b, 1) }
 #[allow(dead_code)]
 pub fn box_z_compare(a: &Primitive, b: &Primitive) -> std::cmp::Ordering { box_compare(a, b, 2) }
+
+pub fn make_coordinate_system(v1: &Vector3<f64>) -> (Vector3<f64>, Vector3<f64>) {
+    let v2: Vector3<f64>;
+    if v1.x.abs() > v1.y.abs() {
+        v2 = Vector3::new(-v1.z, 0., v1.x) * (1. / (v1.x * v1.x + v1.z * v1.z).sqrt());
+    } else {
+        v2 = Vector3::new(0., v1.z, -v1.y) * (1. / (v1.y * v1.y + v1.z * v1.z).sqrt());
+    }
+    let v3 = v1.cross(&v2);
+    (v2, v3)
+}
+
+pub fn face_forward(n: Unit<Vector3<f64>>, v: &Vector3<f64>) -> Unit<Vector3<f64>> {
+    let d = n.dot(&v);
+    return if d < 0. { -n } else { n }
+}
+
+pub fn white() -> Vector3<f64> {
+    Vector3::new(1., 1., 1.)
+}
+
+pub fn black() -> Vector3<f64> {
+    Vector3::new(0., 0., 0.)
+}
+
+pub fn same_hemisphere(v: &Vector3<f64>, w: &Vector3<f64>) -> bool {
+    v.z * w.z > 0.
+}
+
+pub fn make_spherical(sin_t: f64, cos_t: f64, phi: f64) -> Vector3<f64> {
+    Vector3::new(sin_t * phi.cos(), sin_t * phi.sin(), cos_t)
+}
+
+// approximation of error function
+pub fn erf(x: f64) -> f64 {
+    let a1 = 0.254829592;
+    let a2 = -0.284496736;
+    let a3 = 1.421413741;
+    let a4 = -1.453152027;
+    let a5 = 1.061405429;
+    let p = 0.3275911;
+
+    let mut sign = 1;
+    if x < 0. {
+        sign *= -1;
+    }
+    let x = x.abs();
+    let t = 1. / (1. + p * x);
+    let y = 1. - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * (-x * x).exp();
+    if sign == 1 { y } else { -y }
+}
+
+pub fn inv_erf(x: f64) -> f64 {
+    let x = clamp(x, -0.99999, 0.99999);
+    let mut w = -((1. - x) * (1. + x)).ln();
+    let mut p: f64;
+    if w < 5. {
+        w = w - 2.5;
+        p = 2.81022636e-08;
+        p = 3.43273939e-07 + p * w;
+        p = -3.5233877e-06 + p * w;
+        p = -4.39150654e-06 + p * w;
+        p = 0.00021858087 + p * w;
+        p = -0.00125372503 + p * w;
+        p = -0.00417768164 + p * w;
+        p = 0.246640727 + p * w;
+        p = 1.50140941 + p * w;
+    } else {
+        w = w.sqrt() - 3.;
+        p = -0.000200214257;
+        p = 0.000100950558 + p * w;
+        p = 0.00134934322 + p * w;
+        p = -0.00367342844 + p * w;
+        p = 0.00573950773 + p * w;
+        p = -0.0076224613 + p * w;
+        p = 0.00943887047 + p * w;
+        p = 1.00167406 + p * w;
+        p = 2.83297682 + p * w;
+    }
+    p * x
+}

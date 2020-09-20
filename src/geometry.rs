@@ -1,11 +1,12 @@
 use nalgebra::base::{Unit, Vector3, Matrix};
-use nalgebra::geometry::{Projective3, Point3};
+use nalgebra::geometry::{Projective3, Point3, Point2};
 use std::sync::Arc;
+use bumpalo::Bump;
 
-use crate::hittable::BvhNode;
+use crate::hittable::{Mesh, BvhNode};
 use crate::consts::*;
 use crate::util;
-use crate::material::materials::{Texture, Material};
+use crate::material::materials::{Material, Texture};
 use crate::primitive::Primitive;
 
 #[derive(Copy, Clone)]
@@ -114,29 +115,33 @@ impl Ray {
     }
 }
 
-pub fn cast_ray(objs: &Vec<Primitive>, lights: &Vec<usize>, materials: &Vec<Material>, textures: &Vec<Texture>, ray: &Ray, node: &BvhNode, depth: u32) -> Vector3<f64> {
+pub fn cast_ray(objs: &Vec<Primitive>, meshes: &Vec<Mesh>, lights: &Vec<usize>, materials: &Vec<Material>, textures: &Vec<Texture>, ray: &Ray, node: &BvhNode, depth: u32) -> Vector3<f64> {
     if depth <= 0 {
         return Vector3::new(0.0, 0.0, 0.0);
     }
-    let hit_record = node.intersects(objs, ray, SMALL, INFINITY);
+    let hit_record = node.intersects(objs, meshes, ray, SMALL, INFINITY);
     
     match hit_record {
-        Some(record) => {
-            let emitted = Material::emit(materials, record.mat_index, textures, &record);
-            let pair = Material::scatter(materials, record.mat_index, textures, ray, &record);
-            if pair.is_none() {
+        Some(mut record) => {
+            let emitted = Material::emit(&materials[record.mat_index], &mut record, textures);
+            if emitted != util::black() {
                 return emitted;
             }
-            // if !record.front { // only front-facing objects
-            //     return if AMBIENT_LIGHT { util::get_sky(ray) } else { util::get_background(ray) }
-            // }
-            match pair {
-                Some((new_ray, albedo)) => {
-                    let col = cast_ray(objs, lights, materials, textures, &new_ray, node, depth - 1);
-                    return col.component_mul(&albedo) + emitted;
-                },
-                None => Vector3::new(0.0, 0.0, 0.0) // should never happen
+            let arena = Bump::new();
+            // TODO: Use right mode
+            Material::compute_scattering(&materials[record.mat_index], &mut record, &arena, RADIANCE, true, textures);
+            let sample = Point2::new(util::rand(), util::rand());
+            let (color, new_dir, pdf, _) = record.bsdf.sample_f(&-ray.dir, &sample, BSDF_ALL);
+            if pdf == 0. {
+                return util::black();
             }
+            // if record.mat_index == 1 {
+            //     println!("OLD: {} NEW: {}", ray.dir, new_dir);
+            // }
+            let new_ray = Ray::new_time(record.p, new_dir, ray.time);
+            let incoming = cast_ray(objs, meshes, lights, materials, textures, &new_ray, node, depth - 1);
+            let ans = incoming.component_mul(&color);
+            ans
         }
         None => if AMBIENT_LIGHT { util::get_sky(ray) } else { util::get_background(ray) }
     }    

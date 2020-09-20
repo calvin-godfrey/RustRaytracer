@@ -15,9 +15,10 @@ pub enum Primitive {
         bounding_box: Option<BoundingBox>,
     },
     Triangle {
-        mesh: Arc<Mesh>,
+        mesh_index: usize,
         ind: usize,
         bounding_box: Option<BoundingBox>,
+        mat_index: usize,
     },
     MovingSphere {
         r: f64,
@@ -61,11 +62,6 @@ pub enum Primitive {
     FlipFace {
         obj: Box<Primitive>,
     },
-    Medium { // only supports convex shapes for now
-        obj: Box<Primitive>,
-        inv_density: f64,
-        mat_index: usize,
-    }
 }
 
 impl Primitive {
@@ -154,22 +150,18 @@ impl Primitive {
         Primitive::FlipFace { obj }
     }
 
-    pub fn new_medium(obj: Box<Primitive>, inv_density: f64, mat_index: usize) -> Self {
-        Primitive::Medium { obj, inv_density: -1./inv_density, mat_index }
-    }
-
     #[allow(unused_variables)]
-    pub fn intersects(objs: &Vec<Primitive>, index: usize, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
+    pub fn intersects(objs: &Vec<Primitive>, meshes: &Vec<Mesh>, index: usize, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
         let obj = &objs[index];
         match obj {
             Primitive::Sphere { center, r, mat_index, bounding_box } => {sphere_intersect(center, r, *mat_index, ray, tmin, tmax)}
-            Primitive::Triangle { mesh, ind, bounding_box } => {mesh.intersects_triangle(ray, *ind, tmin, tmax)}
+            Primitive::Triangle { mesh_index, ind, bounding_box, mat_index } => {meshes[*mesh_index].intersects_triangle(ray, *ind, *mat_index, tmin, tmax)}
             Primitive::MovingSphere { r, mat_index, t0, t1, c0, c1, bounding_box } => {moving_sphere_intersect(*r, *mat_index, *t0, *t1, c0, c1, ray, tmin, tmax)}
             Primitive::XYRect { x0, y0, x1, y1, k, mat_index, bounding_box, transform } => {xy_rect_intersect(*x0, *y0, *x1, *y1, *k, *mat_index, transform, ray, tmin, tmax)}
             Primitive::XZRect { x0, z0, x1, z1, k, mat_index, bounding_box, transform } => {xz_rect_intersect(*x0, *z0, *x1, *z1, *k, *mat_index, transform, ray, tmin, tmax)}
             Primitive::YZRect { y0, z0, y1, z1, k, mat_index, bounding_box, transform } => {yz_rect_intersect(*y0, *z0, *y1, *z1, *k, *mat_index, transform, ray, tmin, tmax)}
             Primitive::FlipFace { obj } => {
-                let hit = Primitive::intersects_obj(obj.as_ref(), ray, tmin, tmax);
+                let hit = Primitive::intersects_obj(obj.as_ref(), meshes, ray, tmin, tmax);
                 // get the hitrecord of inner, then flip the front-ness
                 if hit.is_none() {
                     None
@@ -179,21 +171,19 @@ impl Primitive {
                     Some(record)
                 }
             }
-            Primitive::Medium { obj, inv_density, mat_index } => { medium_intersects(obj, *inv_density, *mat_index, ray, tmin, tmax) }
         }
     }
 
     #[allow(unused_variables)]
-    pub fn intersects_obj(obj: &Primitive, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
+    pub fn intersects_obj(obj: &Primitive, meshes: &Vec<Mesh>, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
         match obj {
             Primitive::Sphere { center, r, mat_index, bounding_box } => {sphere_intersect(center, r, *mat_index, ray, tmin, tmax)}
-            Primitive::Triangle { mesh, ind, bounding_box } => {mesh.intersects_triangle(ray, *ind, tmin, tmax)}
+            Primitive::Triangle { mesh_index, ind, bounding_box, mat_index } => {meshes[*mesh_index].intersects_triangle(ray, *ind, *mat_index, tmin, tmax)}
             Primitive::MovingSphere { r, mat_index, t0, t1, c0, c1, bounding_box } => {moving_sphere_intersect(*r, *mat_index, *t0, *t1, c0, c1, ray, tmin, tmax)}
             Primitive::XYRect { x0, y0, x1, y1, k, mat_index, bounding_box, transform } => {xy_rect_intersect(*x0, *y0, *x1, *y1, *k, *mat_index, transform, ray, tmin, tmax)}
             Primitive::XZRect { x0, z0, x1, z1, k, mat_index, bounding_box, transform } => {xz_rect_intersect(*x0, *z0, *x1, *z1, *k, *mat_index, transform, ray, tmin, tmax)}
             Primitive::YZRect { y0, z0, y1, z1, k, mat_index, bounding_box, transform } => {yz_rect_intersect(*y0, *z0, *y1, *z1, *k, *mat_index, transform, ray, tmin, tmax)}
             Primitive::FlipFace { obj } => { None } // FlipFace inside a flip face, should never happen
-            Primitive::Medium { obj, inv_density, mat_index } => { medium_intersects(obj, *inv_density, *mat_index, ray, tmin, tmax) }
         }
     }
 
@@ -201,27 +191,12 @@ impl Primitive {
     pub fn get_bounding_box(obj: &Primitive, time0: f64, time1: f64) -> &Option<BoundingBox> {
         match obj {
             Primitive::Sphere { center, r, mat_index, bounding_box } => { bounding_box }
-            Primitive::Triangle { mesh, ind, bounding_box } => {bounding_box}
+            Primitive::Triangle { mesh_index, ind, bounding_box, mat_index } => {bounding_box}
             Primitive::MovingSphere { r, mat_index, t0, t1, c0, c1, bounding_box } => {bounding_box}
             Primitive::XYRect { x0, y0, x1, y1, k, mat_index, bounding_box, transform } => {bounding_box}
             Primitive::XZRect { x0, z0, x1, z1, k, mat_index, bounding_box, transform } => {bounding_box}
             Primitive::YZRect { y0, z0, y1, z1, k, mat_index, bounding_box, transform } => {bounding_box}
             Primitive::FlipFace { obj } => { Primitive::get_bounding_box(obj.as_ref(), time0, time1) }
-            Primitive::Medium { obj, inv_density, mat_index } => {Primitive::get_bounding_box(obj.as_ref(), time0, time1)}
-        }
-    }
-
-    #[allow(unused_variables)]
-    pub fn get_transform(obj: &Primitive) -> &Option<Arc<Projective3<f64>>> {
-        match obj {
-            Primitive::Sphere { center, r, mat_index, bounding_box } => { &None }
-            Primitive::Triangle { mesh, ind, bounding_box } => { &None }
-            Primitive::MovingSphere { r, mat_index, t0, t1, c0, c1, bounding_box } => { &None }
-            Primitive::XYRect { x0, y0, x1, y1, k, mat_index, transform, bounding_box } => { transform }
-            Primitive::XZRect { x0, z0, x1, z1, k, mat_index, transform, bounding_box } => { transform }
-            Primitive::YZRect { y0, z0, y1, z1, k, mat_index, transform, bounding_box } => { transform }
-            Primitive::FlipFace { obj } => { Primitive::get_transform(obj.as_ref()) }
-            Primitive::Medium { obj, inv_density, mat_index } => { Primitive::get_transform(obj.as_ref()) }
         }
     }
 
@@ -232,7 +207,7 @@ impl Primitive {
                 println!("Calling unimplmented funtion, line {} in {}", line!(), file!());
                 0.
             }
-            Primitive::Triangle { mesh, ind, bounding_box } => {
+            Primitive::Triangle { mesh_index, ind, bounding_box, mat_index } => {
                 println!("Calling unimplmented funtion, line {} in {}", line!(), file!());
                 0.
             }
@@ -267,7 +242,6 @@ impl Primitive {
                 d2 / (cos * area)
             }
             Primitive::FlipFace { obj } => { Primitive::get_pdf(obj.as_ref(), origin, dir) }
-            Primitive::Medium { obj, inv_density, mat_index } => { Primitive::get_pdf(obj.as_ref(), origin, dir) }
         }
     }
 
@@ -277,7 +251,7 @@ impl Primitive {
             Primitive::Sphere { center, r, mat_index, bounding_box } => {
                 (*center + util::rand_cosine_dir().scale(*r)) - *origin
             }
-            Primitive::Triangle { mesh, ind, bounding_box } => {
+            Primitive::Triangle { mesh_index, ind, bounding_box, mat_index } => {
                 println!("Calling unimplmented funtion, line {} in {}", line!(), file!());
                 Vector3::new(0., 0., 0.)
             }
@@ -301,7 +275,6 @@ impl Primitive {
                 Point3::new( *k, y, z) - *origin
             }
             Primitive::FlipFace { obj } => { Primitive::get_rand_dir(obj.as_ref(), origin) }
-            Primitive::Medium { obj, inv_density, mat_index } => { Primitive::get_rand_dir(obj.as_ref(), origin) }
         }
     }
 }

@@ -2,11 +2,11 @@ use tobj;
 use nalgebra::geometry::{Projective3, Point3};
 use nalgebra::base::{Vector2, Vector3};
 use crate::hittable;
-use crate::material::materials::{Texture, Material};
+use crate::material::materials::{Texture};
 use crate::consts::*;
 
 #[allow(unused_variables)]
-pub fn parse_obj(materials: &mut Vec<Material>, textures: &mut Vec<Texture>, path: &str, trans: Projective3<f64>, mat: Material) -> hittable::Mesh {
+pub fn parse_obj(path: &str, trans: Projective3<f64>) -> hittable::Mesh {
     let obj_res: Result<(Vec<tobj::Model>, Vec<tobj::Material>), tobj::LoadError> = tobj::load_obj(path, true);
     let mut ind: Vec<usize> = Vec::new();
     let mut p: Vec<Point3<f64>> = Vec::new();
@@ -59,12 +59,12 @@ pub fn parse_obj(materials: &mut Vec<Material>, textures: &mut Vec<Texture>, pat
 
             if let Some(id) = mesh.material_id {
                 // let mesh_mat: &tobj::Material = &mats[id]; // TODO: use this
-                materials.push(mat);
-                let new_mesh = hittable::Mesh { ind, p, n, uv, mat_index: materials.len() - 1, bounding_box: bbox };
+                // materials.push(mat);
+                let new_mesh = hittable::Mesh { ind, p, n, uv, bounding_box: bbox };
                 return new_mesh;
             } else {
-                materials.push(mat);
-                let new_mesh = hittable::Mesh { ind, p, n, uv, mat_index: materials.len() - 1, bounding_box: bbox };
+                // materials.push(mat);
+                let new_mesh = hittable::Mesh { ind, p, n, uv, bounding_box: bbox };
                 return new_mesh;
             }
         },

@@ -3,11 +3,20 @@ use nalgebra::geometry::{Projective3, Point3};
 use std::cmp::Ordering;
 use std::sync::Arc;
 use crate::geometry::Ray;
-use crate::material::materials::{Texture, Material};
 use crate::parser;
 use crate::util;
 use crate::primitive::Primitive;
-#[derive(Clone)]
+use crate::consts::*;
+use crate::bsdf::Bsdf;
+
+#[derive(Clone, Copy)]
+pub struct Shading {
+    pub n: Unit<Vector3<f64>>,
+    pub dpdu: Unit<Vector3<f64>>,
+    pub dpdv: Unit<Vector3<f64>>,
+    dndu: Vector3<f64>,
+    dndv: Vector3<f64>
+}
 pub struct HitRecord {
     pub t: f64, // time of hit along ray
     pub n: Unit<Vector3<f64>>, // normal of surface at point
@@ -15,16 +24,51 @@ pub struct HitRecord {
     pub front: bool, // if the normal points outwards or not
     pub uv: Vector2<f64>, // uv texture coordinates
     pub mat_index: usize,
+    // differential data
+    pub dpdu: Vector3<f64>,
+    pub dpdv: Vector3<f64>,
+    pub dndu: Vector3<f64>,
+    pub dndv: Vector3<f64>,
+    pub shading: Shading,
+    pub wo: Vector3<f64>, // -ray.dir
+    pub dpdx: Vector3<f64>, // pixel space. TODO: use these
+    pub dpdy: Vector3<f64>,
+    pub dudx: Vector3<f64>,
+    pub dvdx: Vector3<f64>,
+    pub dudy: Vector3<f64>,
+    pub dvdy: Vector3<f64>,
+    pub bsdf: Bsdf
 }
 
 impl HitRecord {
-    pub fn new(t: f64, n: Unit<Vector3<f64>>, p: Point3<f64>, front: bool, mat_index: usize) -> Self { Self { t, n, p, front, mat_index, uv: Vector2::new(0., 0.) } }
+    pub fn new(p: Point3<f64>, uv: Vector2<f64>, wo: Vector3<f64>,
+               dpdu: Vector3<f64>, dpdv: Vector3<f64>,
+               dndu: Vector3<f64>, dndv: Vector3<f64>, t: f64, mat_index: usize) -> Self {
+        let n = Unit::new_normalize(dpdu.cross(&dpdv));
+        let shading = Shading { n, dpdu: Unit::new_normalize(dpdu), dpdv: Unit::new_normalize(dpdv), dndu, dndv };
+        HitRecord { p, n, t, front: false, uv, mat_index, dpdu, dpdv, dndu, dndv, wo, shading,
+                    dpdx: util::black(), dpdy: util::black(), dudx: util::black(), dvdx: util::black(), dudy: util::black(), dvdy: util::black(), bsdf: Bsdf::empty() }
+    }
+
     pub fn set_front(&mut self, ray: &Ray) {
         self.front = ray.dir.dot(self.n.as_ref()) < 0.0;
         self.n = if self.front { self.n } else { -self.n }
     }
-}
 
+    pub fn set_shading_geometry(&mut self, dpdus: Unit<Vector3<f64>>, dpdvs: Unit<Vector3<f64>>, dndus: Vector3<f64>, dndvs: Vector3<f64>, is_auth: bool) {
+        let n = Unit::new_normalize(dpdus.cross(&dpdvs));
+        self.shading.n = n;
+        if is_auth {
+            self.n = util::face_forward(self.n, &self.shading.n);
+        } else {
+            self.shading.n = util::face_forward(self.shading.n, &self.n);
+        }
+        self.shading.dpdu = dpdus;
+        self.shading.dpdv = dpdvs;
+        self.shading.dndu = dndus;
+        self.shading.dndv = dndvs;
+    }
+}
 pub struct Mesh {
     // ith triangle has vertices at p[ind[3 * i]], ...
     // and normals at n[ind[3 * i]], ...
@@ -33,16 +77,16 @@ pub struct Mesh {
     pub n: Vec<Vector3<f64>>,
     pub uv: Vec<Vector2<f64>>,
     pub bounding_box: Option<BoundingBox>,
-    pub mat_index: usize,
 }
 
 impl Mesh {
-    pub fn new(materials: &mut Vec<Material>, textures: &mut Vec<Texture>, path: &str, trans: Projective3<f64>, mat: Material) -> Self {
-        parser::parse_obj(materials, textures, path, trans, mat)
+    pub fn new(path: &str, trans: Projective3<f64>, id: usize) -> Self {
+        parser::parse_obj(path, trans)
     }
 
-    pub fn generate_triangles(mesh: &Arc<Self>) -> Vec<Primitive> {
+    pub fn generate_triangles(meshes: &Vec<Mesh>, mesh_index: usize, mat_index: usize) -> Vec<Primitive> {
         let mut triangles: Vec<Primitive> = Vec::new();
+        let mesh = &meshes[mesh_index];
         for index in (0..mesh.ind.len()).step_by(3) {
             let v1 = mesh.p[mesh.ind[index]];
             let v2 = mesh.p[mesh.ind[index + 1]];
@@ -54,13 +98,15 @@ impl Mesh {
             let z_min = v1.z.min(v2.z.min(v3.z));
             let z_max = v1.z.max(v2.z.max(v3.z));
             let tri_box = BoundingBox::new(Point3::new(x_min, y_min, z_min), Point3::new(x_max, y_max, z_max));
-            let tri: Primitive = Primitive::Triangle {mesh: Arc::clone(mesh), ind: index, bounding_box: Some(tri_box)};
+            let tri: Primitive = Primitive::Triangle {mesh_index, ind: index, bounding_box: Some(tri_box), mat_index};
             triangles.push(tri);
         }
         triangles
     }
 
-    pub fn intersects_triangle(&self, ray: &Ray, ind: usize, tmin: f64, tmax: f64) -> Option<HitRecord> {
+    #[warn(non_snake_case)]
+    #[allow(unused_variables, unused_assignments)]
+    pub fn intersects_triangle(&self, ray: &Ray, ind: usize, mat_index: usize, tmin: f64, tmax: f64) -> Option<HitRecord> {
         let ind1 = self.ind[ind];
         let ind2 = self.ind[ind + 1];
         let ind3 = self.ind[ind + 2];
@@ -68,47 +114,155 @@ impl Mesh {
         let p1 = self.p[ind2];
         let p2 = self.p[ind3];
         let dir: Vector3<f64> = ray.dir;
-        let temp1 = p1 - p0;
-        let temp2: Vector3<f64> = p2 - p0;
-        let pvec: Vector3<f64> = dir.cross(&temp2);
-        let det: f64 = temp1.dot(&pvec);
+        // transform vertices so that ray starts at (0, 0, 0) and goes along z+,
+        // assuming that vertices start in world space
+        let origin_vec = ray.origin.coords; 
+        let p0t = p0 - origin_vec;
+        let p1t = p1 - origin_vec;
+        let p2t = p2 - origin_vec;
+        let (kz, _) = dir.abs().argmax();
+        let kx = (kz + 1) % 3;
+        let ky = (kx + 1) % 3;
+        let d = util::permute_vec(&dir, kx, ky, kz);
+        let mut p0t = util::permute_pt(&p0t, kx, ky, kz);
+        let mut p1t = util::permute_pt(&p1t, kx, ky, kz);
+        let mut p2t = util::permute_pt(&p2t, kx, ky, kz);
+        // calculate sheer transform; TODO: Precompute some of this?
+        let s_x = -d.x / d.z;
+        let s_y = -d.y / d.z;
+        let s_z = 1. / d.z;
+        p0t.x += s_x * p0t.z;
+        p0t.y += s_y * p0t.z;
+        p1t.x += s_x * p1t.z;
+        p1t.y += s_y * p1t.z;
+        p2t.x += s_x * p2t.z;
+        p2t.y += s_y * p2t.z;
+        // wait to shear z components until after intersection is confirmed
+        // compute edge coefficients
+        let e0 = p1t.x * p2t.y - p1t.y * p2t.x;
+        let e1 = p2t.x * p0t.y - p2t.y * p0t.x;
+        let e2 = p0t.x * p1t.y - p0t.y * p1t.x;
+        // if they aren't all on the same side of the three edges
+        if (e0 < 0. || e1 < 0. || e2 < 0.) && (e0 > 0. || e1 > 0. || e2 > 0.) {
+            return None; // no intersect
+        }
+        let det = e0 + e1 + e2;
+        if det.abs() < SMALL / 10000. { // hit directly on edge; this will hit another triangle
+            return None;
+        }
+        // apply shear tarnsform to z, calculate barycentric coordinates
+        p0t.z *= s_z;
+        p1t.z *= s_z;
+        p2t.z *= s_z;
+        let t_scaled = e0 * p0t.z + e1 * p1t.z + e2 * p2t.z;
+        if det < 0. && (t_scaled >= 0. || t_scaled < tmax * det) {
+            return None
+        } else if det > 0. && (t_scaled <= 0. || t_scaled > tmax * det) {
+            return None
+        }
+        // intersection is now valid, calculate actual coordinates/time of intersect
         let inv_det = 1. / det;
-
-        let tvec = ray.origin - p0;
-        let u = pvec.dot(&tvec) * inv_det;
-
-        if u < 0. || u > 1. { return None; }
-        let qvec: Vector3<f64> = tvec.cross(&temp1);
-        let v = qvec.dot(&dir) * inv_det;
-
-        if v < 0. || u + v > 1. { return None; }
-        let t = qvec.dot(&temp2) * inv_det;
-
-        if t < tmin || t > tmax { return None; }
-        let normal: Vector3<f64> = if self.n.len() == 0 {
-            temp1.cross(&temp2)
-        } else { 
-            let n1 = (1. - u - v) * self.n[ind1];
-            let n2 = u * self.n[ind2];
-            let n3 = v * self.n[ind3];
-            n1 + n2 + n3
-        };
-        let normal = Unit::new_normalize(normal);
-        let point = ray.at(t);
-
-        let uv: Vector2<f64> = if self.uv.len() == 0 {
-            Vector2::new(0., 0.) // dummy value
+        let b0 = e0 * inv_det;
+        let b1 = e1 * inv_det;
+        let b2 = e2 * inv_det;
+        let t = t_scaled * inv_det;
+        if t < SMALL / 10. {
+            return None;
+        }
+        // calculate partial derivatives
+        // TODO: Use partial derivatives
+        let dpdu: Vector3<f64>;
+        let dpdv: Vector3<f64>;
+        let uvs: [Vector2<f64>; 3] = self.get_uv(ind);
+        let duv02 = uvs[0] - uvs[2];
+        let duv12 = uvs[1] - uvs[2];
+        let dp02 = p0 - p2;
+        let dp12 = p1 - p2;
+        let determinant = duv02.x * duv12.y - duv02.y * duv12.x;
+        if determinant.abs() < SMALL / 10000. { // special case
+            let n: Vector3<f64> = (p2 - p0).cross(&(p1 - p0));
+            if n.magnitude_squared() == 0. {
+                return None; // degenerate triangle
+            }
+            let tangents = util::make_coordinate_system(&n);
+            dpdu = tangents.0;
+            dpdv = tangents.1;
         } else {
-            let uv1 = ( 1. - u - v) * self.uv[ind1];
-            let uv2 = u * self.uv[ind2];
-            let uv3 = v * self.uv[ind3];
-            uv1 + uv2 + uv3
-        };
+            let inv_det = 1. / determinant;
+            dpdu = (duv12[1] * dp02 - duv02[1] * dp12) * inv_det;
+            dpdv = (-duv12[0] * dp02 + duv02[0] * dp12) * inv_det;
+        }
+        // use barycentric coordinates to find intersection point
+        let p_hit: Point3<f64> = b0 * p0 + b1 * p1.coords + b2 * p2.coords;
+        let uv_hit = b0 * uvs[0] + b1 * uvs[1] + b2 * uvs[2];
 
-        let mut record = HitRecord::new(t, normal, point, true, self.mat_index);
+        let normal: Vector3<f64> = if self.n.len() == 0 { // TODO: differentiate between shader/geometric normal
+            dp02.cross(&dp12)
+        } else {
+            b0 * self.n[ind1] + b1 * self.n[ind2] + b2 * self.n[ind3]
+        };
+        // fill in record
+        let mut record = HitRecord::new(p_hit, uv_hit, -ray.dir, dpdu, dpdv, Vector3::new(0., 0., 0.), 
+                                             Vector3::new(0., 0., 0.), t, mat_index);
+        record.n = Unit::new_normalize(dp02.cross(&dp12));
+        record.shading.n = Unit::new_normalize(normal);
+        let mut ss = Unit::new_normalize(dpdu);
+        let mut ts = Unit::new_normalize(record.shading.n.cross(&ss));
+        if ts.magnitude_squared() > 0f64 {
+            ss = Unit::new_normalize(ts.cross(&record.shading.n)); // ensure orthogonality
+        } else { // pick arbitrary
+            let (temp_ss, temp_ts) = util::make_coordinate_system(&record.shading.n);
+            ss = Unit::new_normalize(temp_ss);
+            ts = Unit::new_normalize(temp_ts);
+        }
+        let dndu: Vector3<f64>;
+        let dndv: Vector3<f64>;
+        if self.n.len() > 0 {
+            let determinant = duv02[0] * duv12[1] - duv02[1] * duv12[0];
+            let dn1 = self.n[ind1] - self.n[ind3];
+            let dn2 = self.n[ind2] - self.n[ind3];
+            if determinant.abs() < SMALL / 1000. {
+                let dn: Vector3<f64> = (self.n[ind3] - self.n[ind1]).cross(&(self.n[ind2] - self.n[ind1]));
+                if dn.magnitude_squared() == 0f64 {
+                    dndu = Vector3::new(0., 0., 0.);
+                    dndv = Vector3::new(0., 0., 0.);
+                } else {
+                    let (dnu, dnv) = util::make_coordinate_system(&dn);
+                    dndu = dnu;
+                    dndv = dnv;
+                }
+            } else {
+                let inv_det = 1f64 / determinant;
+                dndu = (duv12[1] * dn1 - duv02[1] * dn2) * inv_det;
+                dndv = (-duv12[0] * dn1 + duv02[0] * dn2) * inv_det;
+            }
+        } else {
+            dndu = Vector3::new(0., 0., 0.); // flat
+            dndv = Vector3::new(0., 0., 0.);
+        }
+        record.set_shading_geometry(ss, ts, dndu, dndv, true);
         record.set_front(ray);
-        record.uv = uv;
+        record.uv = uv_hit;
         Some(record)
+    }
+
+    pub fn get_uv(&self, ind: usize) -> [Vector2<f64>; 3] {
+        if self.uv.len() == 0 {
+            return [Vector2::new(0., 0.), Vector2::new(1., 0.), Vector2::new(1., 1.)];
+        } else {
+            return [self.uv[ind], self.uv[ind + 1], self.uv[ind + 2]];
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn print_triangle(&self, ind: usize) {
+        let ind1 = self.ind[ind];
+        let ind2 = self.ind[ind + 1];
+        let ind3 = self.ind[ind + 2];
+        let p1 = self.p[ind1];
+        let p2 = self.p[ind2];
+        let p3 = self.p[ind3];
+        println!("({:.4}, {:.4}, {:.4}), ({:.4}, {:.4}, {:.4}), ({:.4}, {:.4}, {:.4})", p1.x, p1.y, p1.z, p2.x, p2.y, p2.z, p3.x, p3.y, p3.z);
     }
 }
 
@@ -179,14 +333,14 @@ pub enum BvhNode {
 }
 
 impl BvhNode {
-    pub fn intersects(&self, objs: &Vec<Primitive>, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
+    pub fn intersects(&self, objs: &Vec<Primitive>, meshes: &Vec<Mesh>, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
         match self {
             BvhNode::Internal { left, right, bounding_box } => {
                 if !bounding_box.intersects(ray, tmin, tmax) {
                     return None;
                 }
-                let left_option = left.intersects(objs, ray, tmin, tmax);
-                let right_option = right.intersects(objs, ray, tmin, tmax);
+                let left_option = left.intersects(objs, meshes, ray, tmin, tmax);
+                let right_option = right.intersects(objs, meshes, ray, tmin, tmax);
 
                 match &left_option {
                     Some(l) => {
@@ -207,7 +361,7 @@ impl BvhNode {
                 if !bounding_box.intersects(ray, tmin, tmax) {
                     return None;
                 }
-                return Primitive::intersects(objs, *index, ray, tmin, tmax);
+                return Primitive::intersects(objs, meshes, *index, ray, tmin, tmax);
             }
             BvhNode::Empty => { return None; }
         }
@@ -305,6 +459,7 @@ impl Cube {
         Self {min, max, mat_index, transform: None }
     }
 
+    #[allow(dead_code)]
     pub fn new_transform(min: Vector3<f64>, max: Vector3<f64>, mat_index: usize, transform: Arc<Projective3<f64>>) -> Self {
         Self { min, max, mat_index, transform: Some(Arc::clone(&transform))}
     }

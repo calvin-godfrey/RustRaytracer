@@ -5,7 +5,6 @@ use crate::geometry::Ray;
 use crate::hittable::HitRecord;
 use crate::util;
 use crate::primitive::moving_sphere_center;
-use crate::primitive::Primitive;
 use crate::consts::*;
 
 #[allow(unused_variables)]
@@ -24,15 +23,13 @@ pub fn xy_rect_intersect(x0: f64, y0: f64, x1: f64, y1: f64, k: f64, mat_index: 
         return None;
     }
     let uv = Vector2::new((x-x0)/(x1-x0), (y-y0)/(y1-y0));
-    let mut n = Vector3::new(0., 0., 1.);
     let mut p = transformed_ray.at(t);
     if transform.is_some() {
-        n = transform.as_ref().unwrap().transform_vector(&n);
         p = transform.as_ref().unwrap().transform_point(&p);
     }
-    let mut record = HitRecord::new(t, Unit::new_normalize(n), p, true, mat_index);
-    record.set_front(&transformed_ray);
-    record.uv = uv;
+    let mut record = HitRecord::new(p, uv, -ray.dir, Vector3::new(1., 0., 0.), Vector3::new(0., 1., 0.), 
+                                               Vector3::new(0., 0., 0.), Vector3::new(0., 0., 0.), t, mat_index);
+    record.set_front(&ray); // p and n were transformed to world space, so use the original ray
     Some(record)
 }
 
@@ -52,15 +49,13 @@ pub fn xz_rect_intersect(x0: f64, z0: f64, x1: f64, z1: f64, k: f64, mat_index: 
         return None;
     }
     let uv = Vector2::new((x-x0)/(x1-x0), (z-z0)/(z1-z0));
-    let mut n = Vector3::new(0., 1., 0.);
     let mut p = transformed_ray.at(t);
     if transform.is_some() {
-        n = transform.as_ref().unwrap().transform_vector(&n);
         p = transform.as_ref().unwrap().transform_point(&p);
     }
-    let mut record = HitRecord::new(t, Unit::new_normalize(n), p, true, mat_index);
-    record.set_front(&transformed_ray);
-    record.uv = uv;
+    let mut record = HitRecord::new(p, uv, -ray.dir, Vector3::new(1., 0., 0.), Vector3::new(0., 0., 1.),
+                                               Vector3::new(0., 0., 0.), Vector3::new(0., 0., 0.), t, mat_index);
+    record.set_front(&ray);
     Some(record)
 }
 
@@ -80,15 +75,13 @@ pub fn yz_rect_intersect(y0: f64, z0: f64, y1: f64, z1: f64, k: f64, mat_index: 
         return None;
     }
     let uv = Vector2::new((y-y0)/(y1-y0), (z-z0)/(z1-z0));
-    let mut n = Vector3::new(1., 0., 0.);
     let mut p = transformed_ray.at(t);
     if transform.is_some() {
-        n = transform.as_ref().unwrap().transform_vector(&n);
         p = transform.as_ref().unwrap().transform_point(&p);
     }
-    let mut record = HitRecord::new(t, Unit::new_normalize(n), p, true, mat_index);
-    record.set_front(&transformed_ray);
-    record.uv = uv;
+    let mut record = HitRecord::new(p, uv, -ray.dir, Vector3::new(0., 1., 0.), Vector3::new(0., 0., 1.),
+                                               Vector3::new(0., 0., 0.), Vector3::new(0., 0., 0.), t, mat_index);
+    record.set_front(&ray);
     Some(record)
 }
 
@@ -105,24 +98,22 @@ pub fn sphere_intersect(center: &Point3<f64>, r: &f64, mat_index: usize, ray: &R
     let inv_a = 1.0 / a;
     let root = disc.sqrt();
     let ans = (-b - root) * inv_a; // try first solution to equation
-    let mut hit_record: HitRecord;
+    let t: f64;
     if ans < tmax && ans > tmin {
-        let hit = ray.at(ans);
-        hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, mat_index);
-        hit_record.set_front(ray);
+        t = ans;
     } else {
         let ans = (-b + root) * inv_a;
         if ans < tmax && ans > tmin {
-            let hit = ray.at(ans);
-            let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, mat_index);
-            hit_record.set_front(ray);
-            return Some(hit_record);
+            t = ans;
         } else {
             return None;
         }
     }
-    util::get_sphere_uv((hit_record.p - center).scale( 1. / *r), &mut hit_record);
-    Some(hit_record)
+    // makes it so that we can compute with the center of the sphere at 0, 0, 0
+    let translated_ray = Ray::new_time(ray.origin - center.coords, ray.dir, ray.time);
+    let mut record = make_sphere_record(t, *r, mat_index, &translated_ray);
+    record.p += center.coords;
+    Some(record)
 }
 
 pub fn moving_sphere_intersect(r: f64, mat_index: usize, t0: f64, t1: f64, c0: &Point3<f64>, c1: &Point3<f64>, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
@@ -139,59 +130,102 @@ pub fn moving_sphere_intersect(r: f64, mat_index: usize, t0: f64, t1: f64, c0: &
     let inv_a = 1.0 / a;
     let root = disc.sqrt();
     let ans = (-b - root) * inv_a; // try first solution to equation
+    let t: f64;
     if ans < tmax && ans > tmin {
-        let hit = ray.at(ans);
-        let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, mat_index);
-        hit_record.set_front(ray);
-        return Some(hit_record);
-    }
-    let ans = (-b + root) * inv_a;
-    if ans < tmax && ans > tmin {
-        let hit = ray.at(ans);
-        let mut hit_record = HitRecord::new(ans, Unit::new_normalize(hit - center), hit, true, mat_index);
-        hit_record.set_front(ray);
-        return Some(hit_record);
+        t = ans;
     } else {
-        return None;
+        let ans = (-b + root) * inv_a;
+        if ans < tmax && ans > tmin {
+            t = ans;
+        } else {
+            return None;
+        }
     }
+    // makes it so that we can compute with the center of the sphere at 0, 0, 0
+    let translated_ray = Ray::new_time(ray.origin - center.coords, ray.dir, ray.time);
+    let mut record = make_sphere_record(t, r, mat_index, &translated_ray);
+    record.p += center.coords;
+    Some(record)
 }
 
-pub fn medium_intersects(shape: &Primitive, inv_density: f64, mat_index: usize, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
-    let transform = Primitive::get_transform(shape);
-    let transformed_ray = if transform.is_none() { *ray } else { ray.transform(transform.as_ref().unwrap()) };
-    let first_record = Primitive::intersects_obj(shape, ray, -INFINITY, INFINITY);
-    if first_record.is_none() {
-        // println!("1");
-        return None;
+#[allow(non_snake_case)]
+fn make_sphere_record(t: f64, r: f64, mat_index: usize, ray: &Ray) -> HitRecord {
+    let p = ray.at(t);
+    let mut p: Point3<f64> = p * r / (p - util::black()).coords.magnitude(); // Slightly higher accuracy
+    if p.x == 0. && p.y == 0. {
+        p.x = 1e-5 * r; // so that atan2 exists
     }
-    let mut first_record = first_record.unwrap();
-    let second_record  = Primitive::intersects_obj(shape, ray, first_record.t + 100. * SMALL, INFINITY);
-    if second_record.is_none() {
-        // println!("2");
-        return None; // should only happen if the shape is infinitely long
+    let mut phi = p.y.atan2(p.x);
+    if phi < 0f64 {
+        phi = phi + 2f64 * PI;
     }
-    let mut second_record = second_record.unwrap();
-    if first_record.t < tmin {
-        first_record.t = tmin;
-    }
-    if second_record.t > tmax {
-        second_record.t = tmax;
-    }
-    if first_record.t >= second_record.t {
-        return None;
-    }
-    if first_record.t < 0. {
-        first_record.t = 0.;
-    }
-
-    let ray_length: f64 = transformed_ray.dir.magnitude();
-    let distance_inside = (second_record.t - first_record.t) * ray_length;
-    let hit = inv_density * util::rand().ln();
-    if hit > distance_inside {
-        return None;
-    }
-
-    let t = first_record.t + hit / ray_length;
-    let p = transformed_ray.at(t);
-    Some(HitRecord::new(t, Unit::new_normalize(Vector3::new(1., 0., 0.)), p, true, mat_index)) // TODO: Proper values?
+    let phi_max = 2f64 * PI; // TODO: Generalize, allow partial spheres
+    let theta_min = 0f64;
+    let theta_max = PI;
+    let u = phi / phi_max;
+    let theta = util::clamp(p.z / r, -1., 1.).acos();
+    let v = (theta - theta_min) / (theta_max - theta_min);
+    let z_r = (p.x * p.x + p.y * p.y).sqrt();
+    let inv_z_r = 1f64 / z_r;
+    let cos_phi = p.x * inv_z_r;
+    let sin_phi = p.y * inv_z_r;
+    let dpdu = Vector3::new(-phi_max * p.y, phi_max * p.x, 0.);
+    let dpdv = (theta_max - theta_min) * Vector3::new(p.z * cos_phi, p.z * sin_phi, -r * theta.sin());
+    // big linear algebra
+    let d2pduu = -phi_max * phi_max * Vector3::new(p.x, p.y, 0.);
+    let d2pduv = (theta_max - theta_min) * p.z * phi_max * Vector3::new(-sin_phi, cos_phi, 0.);
+    let d2pdvv = -(theta_max - theta_min) * (theta_max - theta_min) * p.coords;
+    let E = dpdu.dot(&dpdu);
+    let F = dpdu.dot(&dpdv);
+    let G = dpdv.dot(&dpdv);
+    let N = Unit::new_normalize(dpdu.cross(&dpdv));
+    let e = N.dot(&d2pduu);
+    let f = N.dot(&d2pduv);
+    let g = N.dot(&d2pdvv);
+    let inv_egf2= 1f64 / (E * G - F * F);
+    let dndu = (f * F - e * G) * inv_egf2 * dpdu + (e * F - f * E) * inv_egf2 * dpdv;
+    let dndv = (g * F - f * G) * inv_egf2 * dpdu + (f * F - g * E) * inv_egf2 * dpdv;
+    // fill out hitrecord
+    let uv = Vector2::new(u, v);
+    let mut record = HitRecord::new(p, uv, -ray.dir, dpdu, dpdv, dndu, dndv, t, mat_index);
+    record.set_front(&ray);
+    record
 }
+
+// pub fn medium_intersects(shape: &Primitive, inv_density: f64, mat_index: usize, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
+//     let transform = Primitive::get_transform(shape);
+//     let transformed_ray = if transform.is_none() { *ray } else { ray.transform(transform.as_ref().unwrap()) };
+//     let first_record = Primitive::intersects_obj(shape, ray, -INFINITY, INFINITY);
+//     if first_record.is_none() {
+//         return None;
+//     }
+//     let mut first_record = first_record.unwrap();
+//     let second_record  = Primitive::intersects_obj(shape, ray, first_record.t + 100. * SMALL, INFINITY);
+//     if second_record.is_none() {
+//         return None; // should only happen if the shape is infinitely long
+//     }
+//     let mut second_record = second_record.unwrap();
+//     if first_record.t < tmin {
+//         first_record.t = tmin;
+//     }
+//     if second_record.t > tmax {
+//         second_record.t = tmax;
+//     }
+//     if first_record.t >= second_record.t {
+//         return None;
+//     }
+//     if first_record.t < 0. {
+//         first_record.t = 0.;
+//     }
+
+//     let ray_length: f64 = transformed_ray.dir.magnitude();
+//     let distance_inside = (second_record.t - first_record.t) * ray_length;
+//     let hit = inv_density * util::rand().ln();
+//     if hit > distance_inside {
+//         return None;
+//     }
+
+//     let t = first_record.t + hit / ray_length;
+//     let p = transformed_ray.at(t);
+//     Some(HitRecord::new(t, Unit::new_normalize(Vector3::new(1., 0., 0.)), p, true, mat_index)) // TODO: Proper values?
+// }

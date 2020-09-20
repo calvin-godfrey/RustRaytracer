@@ -12,6 +12,7 @@ pub struct Perlin {
     pub scale: f64,
 }
 
+#[allow(dead_code)]
 impl Perlin {
     pub fn new(num_points: usize, scale: f64) -> Self {
         let mut rand_vecs: Vec<Unit<Vector3<f64>>> = Vec::with_capacity(num_points);
