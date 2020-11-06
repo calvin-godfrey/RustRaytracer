@@ -4,6 +4,7 @@ pub const INFINITY: f64 = 1e308;
 pub const PI: f64 = 3.14159265358979;
 pub const SMALL: f64 = 0.001;
 pub const INV_COL_MAX: f64 = 1. / 256.;
+pub const ONE_MINUS_EPSILON: f64 = 1f64 - f64::EPSILON / 2.;
 // Defining rendering quantities
 pub const GAMMA: f64 = 1.8;
 pub const IMAGE_WIDTH: u32 = 480;
@@ -25,6 +26,11 @@ pub const BSDF_DIFFUSE: u8 = 1 << 2;
 pub const BSDF_GLOSSY: u8 = 1 << 3;
 pub const BSDF_SPECULAR: u8 = 1 << 4;
 pub const BSDF_ALL: u8 = BSDF_REFLECTION | BSDF_TRANSMISSION | BSDF_DIFFUSE | BSDF_GLOSSY | BSDF_SPECULAR;
+// constants for light types
+pub const DELTA_POSITION: u8 = 1 << 0;
+pub const DELTA_DIRECTION: u8 = 1 << 1;
+pub const AREA: u8 = 1 << 2;
+pub const INFINITE: u8 = 1 << 3;
 // constants for if ray represents light or importance (start at light or camera)
 pub const IMPORTANCE: u8 = 1;
 pub const RADIANCE: u8 = 0;

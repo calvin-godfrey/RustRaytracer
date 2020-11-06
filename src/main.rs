@@ -24,17 +24,19 @@ mod pdf;
 mod bxdf;
 mod microfacet;
 mod bsdf;
+mod light;
+mod sampler;
 
 fn main() {
     let now = SystemTime::now();
-    let (camera, node, meshes, objs, lights, materials, textures, path) = scenes::cornell_box();
+    let (camera, node, path) = scenes::cornell_box();
     if SINGLE_THREAD {
-        singlethread(path, &node, &camera, &meshes, &objs, &lights, &materials, &textures);
+        singlethread(path, &node, &camera);
     } else {
         if TILED {
-            tile_multithread(path, node, camera, meshes, objs, lights, materials, textures);
+            tile_multithread(path, node, camera);
         } else {
-            multithread(path, node, camera, meshes, objs, lights, materials, textures);
+            multithread(path, node, camera);
         }
     }
     match now.elapsed() {
@@ -59,7 +61,7 @@ fn main() {
     }
 }
 
-fn singlethread(path: String, node: &BvhNode, camera: &Camera, meshes: &Vec<Mesh>, objs: &Vec<Primitive>, lights: &Vec<usize>, materials: &Vec<Material>, textures: &Vec<Texture>) {
+fn singlethread(path: String, node: &BvhNode, camera: &Camera) {
     let mut img = RgbImage::new(IMAGE_WIDTH, IMAGE_HEIGHT);
     if !COLS {
         let mut pixels: Vec<Vec<(f64, f64, f64, u32)>> = Vec::new();
@@ -82,7 +84,7 @@ fn singlethread(path: String, node: &BvhNode, camera: &Camera, meshes: &Vec<Mesh
             let u: f64 = util::rand();
             let v: f64 = util::rand();
             let ray = camera.get_ray(u, v);
-            let res = geometry::cast_ray(objs, meshes, lights, materials, textures, &ray, &node, MAX_DEPTH);
+            let res = geometry::cast_ray(&ray, &node, MAX_DEPTH);
             let i = (u * IMAGE_WIDTH as f64).floor() as usize;
             let j = (v * IMAGE_HEIGHT as f64).floor() as usize;
             util::increment_color(&mut pixels, j, i, &res);
@@ -90,14 +92,13 @@ fn singlethread(path: String, node: &BvhNode, camera: &Camera, meshes: &Vec<Mesh
 
     } else {
         for i in 0u32..IMAGE_WIDTH {
-            // println!("Scanning row {} of {}", i, IMAGE_WIDTH);
             for j in 0u32..IMAGE_HEIGHT {
                 let mut color: Point3<f64> = Point3::origin();
                 for _ in 0u32..SAMPLES_PER_PIXEL {
                     let u: f64 = (i as f64 + util::rand()) / ((IMAGE_WIDTH - 1) as f64);
                     let v: f64 = (j as f64 + util::rand()) / ((IMAGE_HEIGHT - 1) as f64);
                     let ray = camera.get_ray(u, v);
-                    let res: Vector3<f64> = geometry::cast_ray(objs, meshes, lights, materials, textures, &ray, &node, MAX_DEPTH);
+                    let res: Vector3<f64> = geometry::cast_ray(&ray, &node, MAX_DEPTH);
                     color = color + res;
                 }
                 util::draw_color(&mut img, i, j, &color, SAMPLES_PER_PIXEL);
@@ -110,7 +111,7 @@ fn singlethread(path: String, node: &BvhNode, camera: &Camera, meshes: &Vec<Mesh
     img.save(&path).unwrap();
 }
 
-fn multithread(path: String, node: BvhNode, camera: Camera, meshes: Vec<Mesh>, objs: Vec<Primitive>, lights: Vec<usize>, materials: Vec<Material>, textures: Vec<Texture>) {
+fn multithread(path: String, node: BvhNode, camera: Camera) {
     let img: image::RgbImage = RgbImage::new(IMAGE_WIDTH, IMAGE_HEIGHT);
     let pixels: Vec<Vec<(f64, f64, f64, u32)>> = util::make_empty_image(IMAGE_HEIGHT as usize, IMAGE_WIDTH as usize);
 
@@ -118,23 +119,12 @@ fn multithread(path: String, node: BvhNode, camera: Camera, meshes: Vec<Mesh>, o
     let node_arc: Arc<BvhNode> = Arc::new(node);
 
     let image_arc: Arc<Mutex<image::RgbImage>> = Arc::new(Mutex::new(img));
-
     let mut thread_vec: Vec<thread::JoinHandle<()>> = Vec::new();
-    let objs_arc: Arc<Vec<Primitive>> = Arc::new(objs);
-    let lights_arc: Arc<Vec<usize>> = Arc::new(lights);
-    let mats_arc: Arc<Vec<Material>> = Arc::new(materials);
-    let texture_arc: Arc<Vec<Texture>> = Arc::new(textures);
-    let meshes_arc: Arc<Vec<Mesh>> = Arc::new(meshes);
 
     for _ in 0..NUM_THREADS {
         let camera_clone = camera.clone();
         let node_clone = Arc::clone(&node_arc);
         let pixels_clone = Arc::clone(&pixels_mutex);
-        let objs_clone= Arc::clone(&objs_arc);
-        let lights_clone = Arc::clone(&lights_arc);
-        let mats_clone = Arc::clone(&mats_arc);
-        let textures_clone = Arc::clone(&texture_arc);
-        let meshes_clone = Arc::clone(&meshes_arc);
 
         thread_vec.push(thread::spawn(move || {
             let mut local_img: Vec<Vec<(f64, f64, f64, u32)>> = util::make_empty_image(IMAGE_HEIGHT as usize, IMAGE_WIDTH as usize);
@@ -145,7 +135,7 @@ fn multithread(path: String, node: BvhNode, camera: Camera, meshes: Vec<Mesh>, o
                 let u: f64 = util::rand();
                 let v: f64 = util::rand();
                 let ray = camera_clone.get_ray(u, v);
-                let res = geometry::cast_ray(&objs_clone, &meshes_clone, &lights_clone, &mats_clone, &textures_clone, &ray, &node_clone, MAX_DEPTH);
+                let res = geometry::cast_ray(&ray, &node_clone, MAX_DEPTH);
                 let i = (u * IMAGE_WIDTH as f64).floor() as usize;
                 let j = (v * IMAGE_HEIGHT as f64).floor() as usize;
                 util::increment_color(&mut local_img, j, i, &res);
@@ -185,8 +175,7 @@ fn multithread(path: String, node: BvhNode, camera: Camera, meshes: Vec<Mesh>, o
     image_arc.lock().unwrap().save(&path).unwrap();
 }
 
-fn tile_multithread(path: String, node: BvhNode, camera: Camera, meshes: Vec<Mesh>, objs: Vec<Primitive>, lights: Vec<usize>, materials: Vec<Material>, textures: Vec<Texture>) {
-    let meshes_arc = Arc::new(meshes);
+fn tile_multithread(path: String, node: BvhNode, camera: Camera) {
     let img = RgbImage::new(IMAGE_WIDTH, IMAGE_HEIGHT);
     let pixels: Vec<Vec<(f64, f64, f64, u32)>> = util::make_empty_image(IMAGE_HEIGHT as usize, IMAGE_WIDTH as usize);
 
@@ -196,10 +185,6 @@ fn tile_multithread(path: String, node: BvhNode, camera: Camera, meshes: Vec<Mes
     let image_arc: Arc<Mutex<image::RgbImage>> = Arc::new(Mutex::new(img));
 
     let mut thread_vec: Vec<thread::JoinHandle<()>> = Vec::new();
-    let objs_arc: Arc<Vec<Primitive>> = Arc::new(objs);
-    let lights_arc: Arc<Vec<usize>> = Arc::new(lights);
-    let mats_arc: Arc<Vec<Material>> = Arc::new(materials);
-    let texture_arc : Arc<Vec<Texture>> = Arc::new(textures);
 
     // START TILE STUFF
     let num_tiles_wide = (IMAGE_WIDTH) / TILE_WIDTH + 1;
@@ -217,12 +202,7 @@ fn tile_multithread(path: String, node: BvhNode, camera: Camera, meshes: Vec<Mes
         let camera_clone = camera.clone();
         let node_clone = Arc::clone(&node_arc);
         let pixels_clone = Arc::clone(&pixels_mutex);
-        let objs_clone= Arc::clone(&objs_arc);
-        let lights_clone = Arc::clone(&lights_arc);
-        let mats_clone = Arc::clone(&mats_arc);
-        let textures_clone = Arc::clone(&texture_arc);
         let tiles_clone = Arc::clone(&tiles_arc);
-        let meshes_clone= Arc::clone(&meshes_arc);
 
         thread_vec.push(thread::spawn(move || {
             loop {
@@ -262,7 +242,7 @@ fn tile_multithread(path: String, node: BvhNode, camera: Camera, meshes: Vec<Mes
                             let u: f64 = (px as f64 + util::rand()) / ((IMAGE_WIDTH - 1) as f64);
                             let v: f64 = (py as f64 + util::rand()) / ((IMAGE_HEIGHT - 1) as f64);
                             let ray = camera_clone.get_ray(u, v);
-                            let res: Vector3<f64> = geometry::cast_ray(&objs_clone, &meshes_clone, &lights_clone, &mats_clone, &textures_clone, &ray, &node_clone, MAX_DEPTH);
+                            let res: Vector3<f64> = geometry::cast_ray(&ray, &node_clone, MAX_DEPTH);
                             util::increment_color(&mut local_img, y as usize, x as usize, &res);
                         }
                         let finished_pixel = local_img[y as usize][x as usize];

@@ -8,6 +8,29 @@ use crate::util;
 use crate::primitive::Primitive;
 use crate::consts::*;
 use crate::bsdf::Bsdf;
+use crate::light::Light;
+
+/**
+Represents a potential ray *from* p0 *to* p1
+*/
+pub struct Visibility<'a> {
+    pub p0: &'a HitRecord,
+    pub p1: HitRecord,
+}
+
+impl <'a> Visibility<'a> {
+    pub fn make_visibility(p0: &'a HitRecord, p1: HitRecord) -> Self {
+        Visibility { p0, p1 }
+    }
+
+    pub fn unoccluded(&self, node: &BvhNode, objs: &Vec<Primitive>, meshes: &Vec<Mesh>) -> bool {
+        let dir = self.p1.p - self.p0.p;
+        let ray = Ray::new_time(self.p0.p, dir, self.p1.t);
+        // TODO: Use quicker intersection tests that don't make full record
+        node.intersects(objs, meshes, &ray, 0., INFINITY).is_some()
+    }
+}
+
 
 #[derive(Clone, Copy)]
 pub struct Shading {
@@ -24,6 +47,7 @@ pub struct HitRecord {
     pub front: bool, // if the normal points outwards or not
     pub uv: Vector2<f64>, // uv texture coordinates
     pub mat_index: usize,
+    pub prim_index: usize,
     // differential data
     pub dpdu: Vector3<f64>,
     pub dpdv: Vector3<f64>,
@@ -43,11 +67,19 @@ pub struct HitRecord {
 impl HitRecord {
     pub fn new(p: Point3<f64>, uv: Vector2<f64>, wo: Vector3<f64>,
                dpdu: Vector3<f64>, dpdv: Vector3<f64>,
-               dndu: Vector3<f64>, dndv: Vector3<f64>, t: f64, mat_index: usize) -> Self {
+               dndu: Vector3<f64>, dndv: Vector3<f64>, t: f64, prim_index: usize, mat_index: usize) -> Self {
         let n = Unit::new_normalize(dpdu.cross(&dpdv));
         let shading = Shading { n, dpdu: Unit::new_normalize(dpdu), dpdv: Unit::new_normalize(dpdv), dndu, dndv };
-        HitRecord { p, n, t, front: false, uv, mat_index, dpdu, dpdv, dndu, dndv, wo, shading,
+        HitRecord { p, n, t, front: false, uv, mat_index, dpdu, dpdv, dndu, dndv, wo, shading, prim_index,
                     dpdx: util::black(), dpdy: util::black(), dudx: util::black(), dvdx: util::black(), dudy: util::black(), dvdy: util::black(), bsdf: Bsdf::empty() }
+    }
+
+    pub fn make_basic(p: Point3<f64>, t: f64) -> Self {
+        let b = util::black();
+        let ub = Unit::new_normalize(b);
+        let shading = Shading { n: ub, dpdu: ub, dpdv: ub, dndu: b, dndv: b };
+        HitRecord {p, n: ub, t, front: false, uv: Vector2::new(0., 0.), mat_index: 0, dpdu: b, dpdv: b, prim_index: 0,
+                    dndu: b, dndv: b, wo: b, shading, dpdx: b, dpdy: b, dudx: b, dvdx: b, dudy: b, dvdy: b, bsdf: Bsdf::empty() }
     }
 
     pub fn set_front(&mut self, ray: &Ray) {
@@ -67,6 +99,18 @@ impl HitRecord {
         self.shading.dpdv = dpdvs;
         self.shading.dndu = dndus;
         self.shading.dndv = dndvs;
+    }
+
+    /**
+    Returns the emitted radiance at a surface point (if any)
+    */
+    pub fn le(&self, w: &Vector3<f64>, primitives: &[Primitive], lights: &[Light]) -> Vector3<f64> {
+        let prim = &primitives[self.prim_index];
+        if prim.get_light_index() == usize::MAX {
+            util::black()
+        } else {
+            Light::l(&lights[prim.get_light_index()], self, w)
+        }
     }
 }
 pub struct Mesh {
@@ -98,7 +142,7 @@ impl Mesh {
             let z_min = v1.z.min(v2.z.min(v3.z));
             let z_max = v1.z.max(v2.z.max(v3.z));
             let tri_box = BoundingBox::new(Point3::new(x_min, y_min, z_min), Point3::new(x_max, y_max, z_max));
-            let tri: Primitive = Primitive::Triangle {mesh_index, ind: index, bounding_box: Some(tri_box), mat_index};
+            let tri: Primitive = Primitive::Triangle {mesh_index, ind: index, bounding_box: Some(tri_box), light_index: usize::MAX, mat_index};
             triangles.push(tri);
         }
         triangles
@@ -203,7 +247,7 @@ impl Mesh {
         };
         // fill in record
         let mut record = HitRecord::new(p_hit, uv_hit, -ray.dir, dpdu, dpdv, Vector3::new(0., 0., 0.), 
-                                             Vector3::new(0., 0., 0.), t, mat_index);
+                                             Vector3::new(0., 0., 0.), t, 0, mat_index);
         record.n = Unit::new_normalize(dp02.cross(&dp12));
         record.shading.n = Unit::new_normalize(normal);
         let mut ss = Unit::new_normalize(dpdu);

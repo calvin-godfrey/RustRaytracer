@@ -32,7 +32,7 @@ pub fn xy_rect_intersect(x0: f64, y0: f64, x1: f64, y1: f64, k: f64, mat_index: 
         dpdu = trans.transform_vector(&dpdu);
         dpdv = trans.transform_vector(&dpdv);
     }
-    let mut record = HitRecord::new(p, uv, -ray.dir, dpdu, dpdv, util::black(), util::black(), t, mat_index);
+    let mut record = HitRecord::new(p, uv, -ray.dir, dpdu, dpdv, util::black(), util::black(), t, 0, mat_index);
     record.set_front(&ray); // p and n were transformed to world space, so use the original ray
     Some(record)
 }
@@ -62,7 +62,7 @@ pub fn xz_rect_intersect(x0: f64, z0: f64, x1: f64, z1: f64, k: f64, mat_index: 
         dpdu = trans.transform_vector(&dpdu);
         dpdv = trans.transform_vector(&dpdv);
     }
-    let mut record = HitRecord::new(p, uv, -ray.dir, dpdu, dpdv, util::black(), util::black(), t, mat_index);
+    let mut record = HitRecord::new(p, uv, -ray.dir, dpdu, dpdv, util::black(), util::black(), t, 0, mat_index);
     record.set_front(&ray);
     Some(record)
 }
@@ -92,7 +92,7 @@ pub fn yz_rect_intersect(y0: f64, z0: f64, y1: f64, z1: f64, k: f64, mat_index: 
         dpdu = trans.transform_vector(&dpdu);
         dpdv = trans.transform_vector(&dpdv);
     }
-    let mut record = HitRecord::new(p, uv, -ray.dir, dpdu, dpdv, util::black(), util::black(), t, mat_index);
+    let mut record = HitRecord::new(p, uv, -ray.dir, dpdu, dpdv, util::black(), util::black(), t, 0, mat_index);
     record.set_front(&ray);
     Some(record)
 }
@@ -199,7 +199,7 @@ fn make_sphere_record(t: f64, r: f64, mat_index: usize, ray: &Ray) -> HitRecord 
     let dndv = (g * F - f * G) * inv_egf2 * dpdu + (f * F - g * E) * inv_egf2 * dpdv;
     // fill out hitrecord
     let uv = Vector2::new(u, v);
-    let mut record = HitRecord::new(p, uv, -ray.dir, dpdu, dpdv, dndu, dndv, t, mat_index);
+    let mut record = HitRecord::new(p, uv, -ray.dir, dpdu, dpdv, dndu, dndv, t, 0, mat_index);
     record.set_front(&ray);
     record
 }

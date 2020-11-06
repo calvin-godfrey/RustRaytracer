@@ -1,6 +1,6 @@
 use image::{Rgb, RgbImage};
-use nalgebra::geometry::{Projective3, Point3};
-use nalgebra::base::{Unit, Vector3};
+use nalgebra::geometry::{Projective3, Point3, Point2};
+use nalgebra::base::{Unit, Vector3, Vector2};
 use rand::prelude::*;
 use rand::distributions::Standard;
 use std::{sync::{Mutex, Arc}, collections::HashSet};
@@ -40,16 +40,46 @@ pub fn draw_color(img: &mut RgbImage, i: u32, j: u32, color: &Point3<f64>, sampl
     img.put_pixel(i, j, ans);
 }
 
-pub fn rand_in_unit_sphere() -> Vector3<f64> {
-    let a = rand_range(0.,2. * PI);
-    let z = rand_range(-1., 1.);
+pub fn uniform_sample_cone(u: &Point2<f64>, cos_theta_max: f64) -> Vector3<f64> {
+    let cos_theta = (1f64 - u.x) + u.x * cos_theta_max;
+    let sin_theta = (1f64 - cos_theta * cos_theta).sqrt();
+    let phi = u.y * 2f64 * PI;
+    Vector3::new(phi.cos() * sin_theta, phi.sin() * sin_theta, cos_theta)
+}
+
+pub fn uniform_cone_pdf(cos_theta_max: f64) -> f64 {
+    1f64 / (2f64 * PI * (1f64 - cos_theta_max))
+}
+
+pub fn rand_in_unit_sphere(u: &Point2<f64>) -> Vector3<f64> {
+    let a = u.x * 2f64 * PI;
+    let z = 2f64 * u.y - 1f64;
     let r = (1. - z * z).sqrt();
-    return Vector3::new(r * a.cos(), r * a.sin(), z);
+    Vector3::new(r * a.cos(), r * a.sin(), z)
+}
+
+pub fn uniform_sphere_pdf() -> f64 { INV_PI / 4f64 }
+
+pub fn concentric_sample_disk(u: &Point2<f64>) -> Point2<f64> {
+    let u_offset = 2f64 * u - Vector2::new(1f64, 1f64);
+    if u_offset.x == 0f64 && u_offset.y == 0f64 {
+        return Point2::new(0., 0.);
+    }
+    let mut theta: f64;
+    let mut r: f64;
+    if u_offset.x.abs() > u_offset.y.abs() {
+        r = u_offset.x;
+        theta = PI / 4f64 * (u_offset.y / u_offset.x);
+    } else {
+        r = u_offset.y;
+        theta = PI / 2f64 - PI / 4f64 * (u_offset.x / u_offset.y);
+    }
+    Point2::new(r * theta.cos(), r * theta.sin())
 }
 
 #[allow(dead_code)]
 pub fn rand_in_hemisphere(normal: &Vector3<f64>) -> Vector3<f64> {
-    let vec: Vector3<f64> = rand_in_unit_sphere();
+    let vec: Vector3<f64> = rand_in_unit_sphere(&Point2::new(rand(), rand()));
     if normal.dot(&vec) > 0. {
         vec
     } else {

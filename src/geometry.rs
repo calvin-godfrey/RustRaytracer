@@ -9,6 +9,28 @@ use crate::util;
 use crate::material::materials::{Material, Texture};
 use crate::primitive::Primitive;
 
+pub struct Objects {
+    pub meshes: Vec<Mesh>,
+    pub objs: Vec<Primitive>,
+    pub lights: Vec<usize>, // TODO: Change this?
+    pub materials: Vec<Material>,
+    pub textures: Vec<Texture>,
+}
+static mut objects: Objects = Objects { meshes: vec![], objs: vec![], lights: vec![], materials: vec![], textures: vec![] };
+
+pub fn get_objects() -> &'static Objects {
+    unsafe {
+        &objects
+    }
+}
+
+pub fn get_objects_mut() -> &'static mut Objects {
+    // this potentially 
+    unsafe {
+        &mut objects
+    }
+}
+
 #[derive(Copy, Clone)]
 pub struct ONB {
     axis: [Unit<Vector3<f64>>; 3],
@@ -115,7 +137,12 @@ impl Ray {
     }
 }
 
-pub fn cast_ray(objs: &Vec<Primitive>, meshes: &Vec<Mesh>, lights: &Vec<usize>, materials: &Vec<Material>, textures: &Vec<Texture>, ray: &Ray, node: &BvhNode, depth: u32) -> Vector3<f64> {
+pub fn cast_ray(ray: &Ray, node: &BvhNode, depth: u32) -> Vector3<f64> {
+    let all_objects = get_objects();
+    let objs = &all_objects.objs;
+    let meshes = &all_objects.meshes;
+    let materials = &all_objects.materials;
+    let textures = &all_objects.textures;
     if depth <= 0 {
         return Vector3::new(0.0, 0.0, 0.0);
     }
@@ -135,11 +162,8 @@ pub fn cast_ray(objs: &Vec<Primitive>, meshes: &Vec<Mesh>, lights: &Vec<usize>, 
             if pdf == 0. {
                 return util::black();
             }
-            // if record.mat_index == 1 {
-            //     println!("OLD: {} NEW: {}", ray.dir, new_dir);
-            // }
             let new_ray = Ray::new_time(record.p, new_dir, ray.time);
-            let incoming = cast_ray(objs, meshes, lights, materials, textures, &new_ray, node, depth - 1);
+            let incoming = cast_ray(&new_ray, node, depth - 1);
             let ans = incoming.component_mul(&color);
             ans
         }

@@ -22,7 +22,7 @@ impl PDF {
                 (cos / PI).max(0.)
             }
             PDF::HittablePdf { index, origin } => {
-                Primitive::get_pdf(&objs[*index], origin, dir)
+                todo!("Probably replace this")
             }
             PDF::MixturePdf { a, b } => {
                 0.5 * PDF::value(a.as_ref(), objs, dir) + 0.5 * PDF::value(b.as_ref(), objs, dir)
