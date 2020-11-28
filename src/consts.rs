@@ -30,7 +30,7 @@ pub const INFINITY: f64 = 1e308;
 pub const PI: f64 = 3.14159265358979;
 pub const SMALL: f64 = 0.001;
 pub const INV_COL_MAX: f64 = 1. / 256.;
-pub const ONE_MINUS_EPSILON: f64 = 1f64 - f64::EPSILON / 2.;
+pub const ONE_MINUS_EPSILON: f64 = 1f64 - std::f64::EPSILON / 2.;
 // Defined in terms of those above
 pub const IMAGE_HEIGHT: u32 = ((IMAGE_WIDTH as f64) / ASPECT_RATIO) as u32;
 pub const THREAD_UPDATE: u64 = RAYS_PER_THREAD / 200u64;

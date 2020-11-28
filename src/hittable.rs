@@ -113,7 +113,7 @@ impl HitRecord {
     */
     pub fn le(&self, w: &Vector3<f64>, primitives: &[Primitive], lights: &[Light]) -> Vector3<f64> {
         let prim = &primitives[self.prim_index];
-        if prim.get_light_index() == usize::MAX {
+        if prim.get_light_index() == std::usize::MAX {
             util::black()
         } else {
             Light::l(&lights[prim.get_light_index()], self, w)
@@ -164,7 +164,7 @@ impl Mesh {
             let z_min = v1.z.min(v2.z.min(v3.z));
             let z_max = v1.z.max(v2.z.max(v3.z));
             let tri_box = BoundingBox::new(Point3::new(x_min, y_min, z_min), Point3::new(x_max, y_max, z_max));
-            let tri: Primitive = Primitive::Triangle {mesh_index, ind: index, bounding_box: Some(tri_box), light_index: usize::MAX, mat_index};
+            let tri: Primitive = Primitive::Triangle {mesh_index, ind: index, bounding_box: Some(tri_box), light_index: std::usize::MAX, mat_index};
             triangles.push(tri);
         }
         triangles

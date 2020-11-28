@@ -66,7 +66,7 @@ impl Primitive {
         let min = center - r_vec;
         let max = center + r_vec;
         let bounding_box = Some(BoundingBox::new(min, max));
-        Primitive::Sphere {center, r, mat_index, bounding_box, light_index: usize::MAX }
+        Primitive::Sphere {center, r, mat_index, bounding_box, light_index: std::usize::MAX }
     }
 
     pub fn new_xy_rect(x0: f64, y0: f64, x1: f64, y1: f64, k: f64, mat_index: usize) -> Primitive {
@@ -80,11 +80,11 @@ impl Primitive {
                 let p2 = Point3::new(x1, y1, k + SMALL);
                 let bounding_box = BoundingBox::new(p1, p2);
                 let n_box = Some(util::get_new_box(bounding_box, &inner_transform));
-                Primitive::XYRect {x0, y0, x1, y1, k, mat_index, bounding_box: n_box, transform: Some(Arc::clone(&inner_transform)), light_index: usize::MAX }
+                Primitive::XYRect {x0, y0, x1, y1, k, mat_index, bounding_box: n_box, transform: Some(Arc::clone(&inner_transform)), light_index: std::usize::MAX }
             }
             None => {
                 let bounding_box = Some(BoundingBox::new(Point3::new(x0, y0, k - SMALL), Point3::new(x1, y1, k + SMALL)));
-                Primitive::XYRect {x0, y0, x1, y1, k, mat_index, bounding_box, transform: None, light_index: usize::MAX }
+                Primitive::XYRect {x0, y0, x1, y1, k, mat_index, bounding_box, transform: None, light_index: std::usize::MAX }
             }
         }
     }
@@ -100,11 +100,11 @@ impl Primitive {
                 let p2 = Point3::new(x1, k + SMALL, z1);
                 let bounding_box = BoundingBox::new(p1, p2);
                 let n_box = Some(util::get_new_box(bounding_box, &inner_transform));
-                Primitive::XZRect {x0, z0, x1, z1, k, mat_index, bounding_box: n_box, transform: Some(Arc::clone(&inner_transform)), light_index: usize::MAX }
+                Primitive::XZRect {x0, z0, x1, z1, k, mat_index, bounding_box: n_box, transform: Some(Arc::clone(&inner_transform)), light_index: std::usize::MAX }
             }
             None => {
                 let bounding_box = Some(BoundingBox::new(Point3::new(x0, k - SMALL, z0), Point3::new(x1, k + SMALL, z1)));
-                Primitive::XZRect {x0, z0, x1, z1, k, mat_index, bounding_box, transform: None, light_index: usize::MAX }
+                Primitive::XZRect {x0, z0, x1, z1, k, mat_index, bounding_box, transform: None, light_index: std::usize::MAX }
             }
         }
     }
@@ -120,11 +120,11 @@ impl Primitive {
                 let p2 = Point3::new(k + SMALL, y1, z1);
                 let bounding_box = BoundingBox::new(p1, p2);
                 let n_box = Some(util::get_new_box(bounding_box, &inner_transform));
-                Primitive::YZRect {y0, z0, y1, z1, k, mat_index, bounding_box: n_box, transform: Some(Arc::clone(&inner_transform)), light_index: usize::MAX }
+                Primitive::YZRect {y0, z0, y1, z1, k, mat_index, bounding_box: n_box, transform: Some(Arc::clone(&inner_transform)), light_index: std::usize::MAX }
             }
             None => {
                 let bounding_box = Some(BoundingBox::new(Point3::new(k - SMALL, y0, z0), Point3::new(k + SMALL, y1, z1)));
-                Primitive::YZRect {y0, z0, y1, z1, k, mat_index, bounding_box, transform: None, light_index: usize::MAX }
+                Primitive::YZRect {y0, z0, y1, z1, k, mat_index, bounding_box, transform: None, light_index: std::usize::MAX }
             }
         }
     }

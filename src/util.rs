@@ -147,27 +147,27 @@ pub fn reflect(v: &Vector3<f64>, n: &Unit<Vector3<f64>>) -> Vector3<f64> {
 }
 
 pub fn increment_color(arr: &mut Vec<Vec<(f64, f64, f64, u32)>>, i: usize, j: usize, color: &Vector3<f64>) {
-    arr[i][j].0 += if color.x == f64::NAN { 0. } else { color.x };
-    arr[i][j].1 += if color.y == f64::NAN { 0. } else { color.y };
-    arr[i][j].2 += if color.z == f64::NAN { 0. } else { color.z };
+    arr[i][j].0 += if color.x == std::f64::NAN { 0. } else { color.x };
+    arr[i][j].1 += if color.y == std::f64::NAN { 0. } else { color.y };
+    arr[i][j].2 += if color.z == std::f64::NAN { 0. } else { color.z };
     arr[i][j].3 += 1;
 }
 
 #[allow(dead_code)]
 pub fn thread_safe_write_pixel(arr: &Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>>, i: usize, j: usize, color: (f64, f64, f64, u32)) {
     let mut data = arr.lock().unwrap();
-    data[i][j].0 += if color.0 == f64::NAN { 0. } else { color.0 };
-    data[i][j].1 += if color.1 == f64::NAN { 0. } else { color.1 };
-    data[i][j].2 += if color.2 == f64::NAN { 0. } else { color.2 };
+    data[i][j].0 += if color.0 == std::f64::NAN { 0. } else { color.0 };
+    data[i][j].1 += if color.1 == std::f64::NAN { 0. } else { color.1 };
+    data[i][j].2 += if color.2 == std::f64::NAN { 0. } else { color.2 };
     data[i][j].3 += color.3;
 }
 
 #[allow(dead_code)]
 pub fn thread_safe_increment_color(arr: &Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>>, i: usize, j: usize, color: &Vector3<f64>) {
     let mut data = arr.lock().unwrap();
-    data[i][j].0 += if color.x == f64::NAN { 0. } else { color.x };
-    data[i][j].1 += if color.y == f64::NAN { 0. } else { color.y };
-    data[i][j].2 += if color.z == f64::NAN { 0. } else { color.z };
+    data[i][j].0 += if color.x == std::f64::NAN { 0. } else { color.x };
+    data[i][j].1 += if color.y == std::f64::NAN { 0. } else { color.y };
+    data[i][j].2 += if color.z == std::f64::NAN { 0. } else { color.z };
     data[i][j].3 += 1;
 }
 
@@ -253,7 +253,7 @@ fn point_to_color(vec: &Point3<f64>, gamma: f64, samples: u32) -> Rgb<u8> {
     let r: f64 = clamp(vec[0] * scale, 0., 1.);
     let g: f64 = clamp(vec[1] * scale, 0., 1.);
     let b: f64 = clamp(vec[2] * scale, 0., 1.);
-    if r == f64::NAN || g == f64::NAN || b == f64::NAN {
+    if r == std::f64::NAN || g == std::f64::NAN || b == std::f64::NAN {
         println!("BAD");
     }
     Rgb([(r.powf(gamma) * 256.).round() as u8,
