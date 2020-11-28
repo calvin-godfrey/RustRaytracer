@@ -15,19 +15,21 @@ pub struct Objects {
     pub lights: Vec<usize>, // TODO: Change this?
     pub materials: Vec<Material>,
     pub textures: Vec<Texture>,
+    pub node: BvhNode,
 }
-static mut objects: Objects = Objects { meshes: vec![], objs: vec![], lights: vec![], materials: vec![], textures: vec![] };
+static mut OBJECTS: Objects = Objects { meshes: vec![], objs: vec![], lights: vec![], materials: vec![], textures: vec![], node: BvhNode::Empty };
 
 pub fn get_objects() -> &'static Objects {
     unsafe {
-        &objects
+        &OBJECTS
     }
 }
 
 pub fn get_objects_mut() -> &'static mut Objects {
-    // this potentially 
+    // this is technically safe because it's
+    // only ever used in the single-thread stage of the program
     unsafe {
-        &mut objects
+        &mut OBJECTS
     }
 }
 
@@ -137,33 +139,28 @@ impl Ray {
     }
 }
 
-pub fn cast_ray(ray: &Ray, node: &BvhNode, depth: u32) -> Vector3<f64> {
-    let all_objects = get_objects();
-    let objs = &all_objects.objs;
-    let meshes = &all_objects.meshes;
-    let materials = &all_objects.materials;
-    let textures = &all_objects.textures;
+pub fn cast_ray(ray: &Ray, depth: u32) -> Vector3<f64> {
     if depth <= 0 {
         return Vector3::new(0.0, 0.0, 0.0);
     }
-    let hit_record = node.intersects(objs, meshes, ray, SMALL, INFINITY);
+    let hit_record = get_objects().node.intersects(ray, SMALL, INFINITY);
     
     match hit_record {
         Some(mut record) => {
-            let emitted = Material::emit(&materials[record.mat_index], &mut record, textures);
+            let emitted = Material::emit(&mut record);
             if emitted != util::black() {
                 return emitted;
             }
             let arena = Bump::new();
             // TODO: Use right mode
-            Material::compute_scattering(&materials[record.mat_index], &mut record, &arena, RADIANCE, true, textures);
+            Material::compute_scattering(&mut record, &arena, RADIANCE, true);
             let sample = Point2::new(util::rand(), util::rand());
             let (color, new_dir, pdf, _) = record.bsdf.sample_f(&-ray.dir, &sample, BSDF_ALL);
             if pdf == 0. {
                 return util::black();
             }
             let new_ray = Ray::new_time(record.p, new_dir, ray.time);
-            let incoming = cast_ray(&new_ray, node, depth - 1);
+            let incoming = cast_ray(&new_ray, depth - 1);
             let ans = incoming.component_mul(&color);
             ans
         }

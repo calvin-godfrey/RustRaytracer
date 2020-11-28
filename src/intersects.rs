@@ -128,38 +128,6 @@ pub fn sphere_intersect(center: &Point3<f64>, r: &f64, mat_index: usize, ray: &R
     Some(record)
 }
 
-pub fn moving_sphere_intersect(r: f64, mat_index: usize, t0: f64, t1: f64, c0: &Point3<f64>, c1: &Point3<f64>, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
-    let center = moving_sphere_center(c0, c1, t0, t1, ray.time);
-    let diff: Vector3<f64> = ray.origin - center;
-    // get quadratic equation, calculate discriminant
-    let a = ray.dir.dot(&ray.dir);
-    let b = diff.dot(&ray.dir);
-    let c = diff.dot(&diff) - r * r;
-    let disc = b * b - a * c;
-    if disc < 0.0 {
-        return None;
-    }
-    let inv_a = 1.0 / a;
-    let root = disc.sqrt();
-    let ans = (-b - root) * inv_a; // try first solution to equation
-    let t: f64;
-    if ans < tmax && ans > tmin {
-        t = ans;
-    } else {
-        let ans = (-b + root) * inv_a;
-        if ans < tmax && ans > tmin {
-            t = ans;
-        } else {
-            return None;
-        }
-    }
-    // makes it so that we can compute with the center of the sphere at 0, 0, 0
-    let translated_ray = Ray::new_time(ray.origin - center.coords, ray.dir, ray.time);
-    let mut record = make_sphere_record(t, r, mat_index, &translated_ray);
-    record.p += center.coords;
-    Some(record)
-}
-
 #[allow(non_snake_case)]
 fn make_sphere_record(t: f64, r: f64, mat_index: usize, ray: &Ray) -> HitRecord {
     let p = ray.at(t);

@@ -10,6 +10,7 @@ pub mod materials {
     use crate::microfacet::{trowbridge_reitz_roughness_to_alpha, MicrofacetDistribution};
     use crate::bsdf::Bsdf;
     use crate::bxdf::{Fresnel, Bxdf};
+    use crate::geometry::get_objects;
 
     pub enum Material {
         Matte { k_d_id: usize, sigma: f64, bump_id: usize },
@@ -22,13 +23,14 @@ pub mod materials {
     
     impl Material {
         #[allow(unused_variables)]
-        pub fn compute_scattering(mat: &Material, record: &mut HitRecord, arena: &Bump, mode: u8, allow_lobes: bool, textures: &Vec<Texture>) {
+        pub fn compute_scattering(record: &mut HitRecord, arena: &Bump, mode: u8, allow_lobes: bool) {
+            let mat = &get_objects().materials[record.mat_index];
             // TODO: Use arena?
             match mat {
                 Material::Matte { k_d_id, sigma, bump_id } => {
                     // Material::bump(textures, *texture_id, record); // TODO: bump
                     let sig = util::clamp(*sigma, 0., 90.);
-                    let color = Texture::value(textures, *k_d_id, record.uv.x, record.uv.y, &record.p);
+                    let color = Texture::value(*k_d_id, record.uv.x, record.uv.y, &record.p);
                     if color != util::black() {
                         record.bsdf = Bsdf::new(record, 1.); // only make bsdf nonempty if we add bxdfs
                         if sig == 0f64 {
@@ -40,12 +42,12 @@ pub mod materials {
                 }
                 Material::Light { texture_id } => {}
                 Material::Plastic { k_d_id, k_s_id, bump_id, roughness, remap_roughness } => {
-                    let color = Texture::value(textures, *k_d_id, record.uv.x, record.uv.y, &record.p);
+                    let color = Texture::value(*k_d_id, record.uv.x, record.uv.y, &record.p);
                     if color != util::black() {
                         record.bsdf = Bsdf::new(record, 1.);
                         record.bsdf.add(Bxdf::make_lambertian_reflection(color));
                     }
-                    let specular = Texture::value(textures, *k_s_id, record.uv.x, record.uv.y, &record.p);
+                    let specular = Texture::value(*k_s_id, record.uv.x, record.uv.y, &record.p);
                     if specular != util::black() {
                         if Bsdf::is_empty(&record.bsdf) {
                             record.bsdf = Bsdf::new(record, 1.);
@@ -63,8 +65,8 @@ pub mod materials {
                     let eta = *index;
                     let mut urough = *u_roughness;
                     let mut vrough = *v_roughness;
-                    let r = Texture::value(textures, *k_r_id, record.uv.x, record.uv.y, &record.p);
-                    let t = Texture::value(textures, *k_t_id, record.uv.x, record.uv.y, &record.p);
+                    let r = Texture::value(*k_r_id, record.uv.x, record.uv.y, &record.p);
+                    let t = Texture::value(*k_t_id, record.uv.x, record.uv.y, &record.p);
                     record.bsdf = Bsdf::new(record, eta);
                     if r == util::black() && t == util::black() {
                         return;
@@ -103,14 +105,14 @@ pub mod materials {
                     // TODO: bump
                     record.bsdf = Bsdf::new(record, 1.);
                     let u_rough = if *urough_id == std::usize::MAX {
-                        Texture::value(textures, *rough_id, record.uv.x, record.uv.y, &record.p)
+                        Texture::value(*rough_id, record.uv.x, record.uv.y, &record.p)
                     } else {
-                        Texture::value(textures, *urough_id, record.uv.x, record.uv.y, &record.p)
+                        Texture::value(*urough_id, record.uv.x, record.uv.y, &record.p)
                     };
                     let v_rough = if *vrough_id == std::usize::MAX {
-                        Texture::value(textures, *rough_id, record.uv.x, record.uv.y, &record.p)
+                        Texture::value(*rough_id, record.uv.x, record.uv.y, &record.p)
                     } else {
-                        Texture::value(textures, *vrough_id, record.uv.x, record.uv.y, &record.p)
+                        Texture::value(*vrough_id, record.uv.x, record.uv.y, &record.p)
                     };
                     let uroughness: f64;
                     let vroughness: f64;
@@ -121,8 +123,8 @@ pub mod materials {
                         uroughness = u_rough.x;
                         vroughness = v_rough.x;
                     }
-                    let eta = Texture::value(textures, *eta_id, record.uv.x, record.uv.y, &record.p);
-                    let k = Texture::value(textures, *k_id, record.uv.x, record.uv.y, &record.p);
+                    let eta = Texture::value(*eta_id, record.uv.x, record.uv.y, &record.p);
+                    let k = Texture::value(*k_id, record.uv.x, record.uv.y, &record.p);
                     let fresnel = Fresnel::FresnelConductor {eta, k};
                     let mfd = MicrofacetDistribution::make_trowbridge_reitz(uroughness, vroughness, true);
                     record.bsdf.add(Bxdf::make_microfacet_reflection(util::white(), fresnel, mfd));
@@ -130,7 +132,7 @@ pub mod materials {
                 Material::Mirror { color_id, bump_id } => {
                     // bump
                     record.bsdf = Bsdf::new(record, 1.);
-                    let color = Texture::value(textures, *color_id, record.uv.x, record.uv.y, &record.p);
+                    let color = Texture::value(*color_id, record.uv.x, record.uv.y, &record.p);
                     if color != util::black() {
                         record.bsdf.add(Bxdf::make_specular_reflection(color, Fresnel::FresnelNoOp));
                     }
@@ -139,10 +141,11 @@ pub mod materials {
         }
     
         #[allow(unused_variables)]
-        pub fn emit(mat: &Material, record: &mut HitRecord, textures:  &Vec<Texture>) -> Vector3<f64> {
+        pub fn emit(record: &mut HitRecord) -> Vector3<f64> {
+            let mat = &get_objects().materials[record.mat_index];
             match mat {
                 Material::Light { texture_id } => {
-                    Texture::value(textures, *texture_id, record.uv.x, record.uv.y, &record.p)
+                    Texture::value(*texture_id, record.uv.x, record.uv.y, &record.p)
                 }
                 _ => {util::black()}
             }
@@ -196,8 +199,8 @@ pub mod materials {
 
     impl Texture {
 
-        pub fn value(textures: &Vec<Texture>, index: usize, u: f64, v: f64, p: &Point3<f64>) -> Vector3<f64> {
-            match &textures[index] {
+        pub fn value(index: usize, u: f64, v: f64, p: &Point3<f64>) -> Vector3<f64> {
+            match &get_objects().textures[index] {
                 Texture::Image { img } => {
                     Texture::image_value(img, u, v, p)
                 },
@@ -205,9 +208,9 @@ pub mod materials {
                 Texture::Checkered { even, odd, frequency} => {
                     let mult = (frequency * p.x).sin() * (frequency * p.y).sin() * (frequency * p.z).sin();
                     if mult < 0. {
-                        Texture::value(textures, *even, u, v, p)
+                        Texture::value(*even, u, v, p)
                     } else {
-                        Texture::value(textures, *odd, u, v, p)
+                        Texture::value(*odd, u, v, p)
                     }
                 }
                 Texture::Perlin { perlin } => {

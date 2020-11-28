@@ -51,22 +51,27 @@ pub fn uniform_cone_pdf(cos_theta_max: f64) -> f64 {
     1f64 / (2f64 * PI * (1f64 - cos_theta_max))
 }
 
-pub fn rand_in_unit_sphere(u: &Point2<f64>) -> Vector3<f64> {
-    let a = u.x * 2f64 * PI;
-    let z = 2f64 * u.y - 1f64;
-    let r = (1. - z * z).sqrt();
-    Vector3::new(r * a.cos(), r * a.sin(), z)
+pub fn uniform_sample_sphere(u: &Point2<f64>) -> Vector3<f64> {
+    let z: f64 = 1f64 - 2f64 * u[0];
+    let r = 0f64.max(1f64 - z * z).sqrt();
+    let phi: f64 = 2f64 * PI * u[1];
+    Vector3::new(r * phi.cos(), r * phi.sin(), z)
 }
 
 pub fn uniform_sphere_pdf() -> f64 { INV_PI / 4f64 }
+
+pub fn uniform_sample_triangle(u: &Point2<f64>) -> Point2<f64> {
+    let s0 = u[0].sqrt();
+    Point2::new(1f64 - s0, u[1] * s0)
+}
 
 pub fn concentric_sample_disk(u: &Point2<f64>) -> Point2<f64> {
     let u_offset = 2f64 * u - Vector2::new(1f64, 1f64);
     if u_offset.x == 0f64 && u_offset.y == 0f64 {
         return Point2::new(0., 0.);
     }
-    let mut theta: f64;
-    let mut r: f64;
+    let theta: f64;
+    let r: f64;
     if u_offset.x.abs() > u_offset.y.abs() {
         r = u_offset.x;
         theta = PI / 4f64 * (u_offset.y / u_offset.x);
@@ -79,7 +84,7 @@ pub fn concentric_sample_disk(u: &Point2<f64>) -> Point2<f64> {
 
 #[allow(dead_code)]
 pub fn rand_in_hemisphere(normal: &Vector3<f64>) -> Vector3<f64> {
-    let vec: Vector3<f64> = rand_in_unit_sphere(&Point2::new(rand(), rand()));
+    let vec: Vector3<f64> = uniform_sample_sphere(&Point2::new(rand(), rand()));
     if normal.dot(&vec) > 0. {
         vec
     } else {

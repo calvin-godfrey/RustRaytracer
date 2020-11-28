@@ -99,12 +99,12 @@ impl Bsdf {
         if wo.z == 0. {
             (util::black(), util::black(), 0f64, 0u8);
         }
-        let (mut color, wi, mut pdf) = bxdf::Bxdf::sample_f(bxdf, &wo, sample, 1u8); // TODO: What is sample type?
+        let (mut color, wi, mut pdf) = bxdf::Bxdf::sample_f(bxdf, &wo, sample, bxdf_type); // TODO: What is sample type?
         if pdf == 0. {
             (util::black(), util::black(), 0f64, 0u8);
         }
         let wiw = self.local_to_world(&wi);
-
+        
         if (bxdf::Bxdf::get_type(bxdf) & BSDF_SPECULAR) == 0 && matching > 1 {
             for index in 0..self.bxdfs.len() {
                 let b = self.bxdfs[index].as_ref();
@@ -116,20 +116,20 @@ impl Bsdf {
         if matching > 1 {
             pdf = pdf / matching as f64;
         }
-
+        
         if (bxdf::Bxdf::get_type(bxdf) & BSDF_SPECULAR) == 0 {
             let reflect = wiw.dot(&self.ng) * wow.dot(&self.ng) > 0.;
             color = Vector3::new(0., 0., 0.);
             for index in 0..self.bxdfs.len() {
                 let b = self.bxdfs[index].as_ref();
                 if bxdf::matches_flags(bxdf::Bxdf::get_type(b), bxdf_type) &&
-                    ((reflect && (bxdf::Bxdf::get_type(b) & BSDF_REFLECTION) > 0) || 
-                    ((!reflect && (bxdf::Bxdf::get_type(b) & BSDF_TRANSMISSION) > 0))) {
-                        color += bxdf::Bxdf::f(b, &wo, &wi);
-                    }
+                ((reflect && (bxdf::Bxdf::get_type(b) & BSDF_REFLECTION) > 0) || 
+                ((!reflect && (bxdf::Bxdf::get_type(b) & BSDF_TRANSMISSION) > 0))) {
+                    color += bxdf::Bxdf::f(b, &wo, &wi);
+                }
             }
         }
-
+        
         (color, wiw, pdf, 0u8)
     }
     // TODO: Add rho methods

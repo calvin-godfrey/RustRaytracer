@@ -23,11 +23,11 @@ impl <'a> Visibility<'a> {
         Visibility { p0, p1 }
     }
 
-    pub fn unoccluded(&self, node: &BvhNode, objs: &Vec<Primitive>, meshes: &Vec<Mesh>) -> bool {
+    pub fn unoccluded(&self) -> bool {
         let dir = self.p1.p - self.p0.p;
         let ray = Ray::new_time(self.p0.p, dir, self.p1.t);
         // TODO: Use quicker intersection tests that don't make full record
-        node.intersects(objs, meshes, &ray, 0., INFINITY).is_some()
+        crate::geometry::get_objects().node.intersects(&ray, 0., INFINITY).is_some()
     }
 }
 
@@ -82,6 +82,13 @@ impl HitRecord {
                     dndu: b, dndv: b, wo: b, shading, dpdx: b, dpdy: b, dudx: b, dvdx: b, dudy: b, dvdy: b, bsdf: Bsdf::empty() }
     }
 
+    pub fn make_normal(p: Point3<f64>, n: Unit<Vector3<f64>>) -> Self {
+        let b = util::black();
+        let shading = Shading { n: n, dpdu: n, dpdv: n, dndu: b, dndv: b };
+        HitRecord {p, n, t: 0f64, front: false, uv: Vector2::new(0., 0.), mat_index: 0, dpdu: b, dpdv: b, prim_index: 0,
+            dndu: b, dndv: b, wo: b, shading, dpdx: b, dpdy: b, dudx: b, dvdx: b, dudy: b, dvdy: b, bsdf: Bsdf::empty() }
+    }
+
     pub fn set_front(&mut self, ray: &Ray) {
         self.front = ray.dir.dot(self.n.as_ref()) < 0.0;
         self.n = if self.front { self.n } else { -self.n }
@@ -111,6 +118,21 @@ impl HitRecord {
         } else {
             Light::l(&lights[prim.get_light_index()], self, w)
         }
+    }
+
+    /**
+    Generate a ray in the given direction
+    */
+    pub fn spawn_ray(&self, d: &Vector3<f64>) -> Ray {
+        Ray::new_time(self.p, *d, self.t)
+    }
+
+    /**
+    Generate ray towards the given point
+    */
+    pub fn spawn_ray_to(&self, p: &Point3<f64>) -> Ray {
+        let d = p - self.p;
+        Ray::new_time(self.p, d, self.t)
     }
 }
 pub struct Mesh {
@@ -377,14 +399,14 @@ pub enum BvhNode {
 }
 
 impl BvhNode {
-    pub fn intersects(&self, objs: &Vec<Primitive>, meshes: &Vec<Mesh>, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
+    pub fn intersects(&self, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
         match self {
             BvhNode::Internal { left, right, bounding_box } => {
                 if !bounding_box.intersects(ray, tmin, tmax) {
                     return None;
                 }
-                let left_option = left.intersects(objs, meshes, ray, tmin, tmax);
-                let right_option = right.intersects(objs, meshes, ray, tmin, tmax);
+                let left_option = left.intersects(ray, tmin, tmax);
+                let right_option = right.intersects(ray, tmin, tmax);
 
                 match &left_option {
                     Some(l) => {
@@ -405,7 +427,7 @@ impl BvhNode {
                 if !bounding_box.intersects(ray, tmin, tmax) {
                     return None;
                 }
-                return Primitive::intersects(objs, meshes, *index, ray, tmin, tmax);
+                return Primitive::intersects(*index, ray, tmin, tmax);
             }
             BvhNode::Empty => { return None; }
         }

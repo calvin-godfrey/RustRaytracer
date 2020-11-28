@@ -2,7 +2,7 @@
 use nalgebra::base::{Unit, Vector3};
 use nalgebra::geometry::{Projective3, Point3, Point2};
 use crate::hittable::{Visibility, HitRecord};
-use crate::geometry::{ONB, Ray};
+use crate::geometry::{ONB, Ray, get_objects};
 use crate::consts::*;
 use crate::util;
 use crate::primitive::Primitive;
@@ -49,7 +49,7 @@ impl Light {
     pub fn get_spot_cos(light: &Light) -> (f64, f64) {
         match light {
             Light::Spot { cos_width, cos_falloff, .. } => { (*cos_width, *cos_falloff) }
-            _ => { (-1f64, -1f64) }
+            _ => { (-1f64, -1f64) } // doesn't matter
         }
     }
 
@@ -86,7 +86,18 @@ impl Light {
                 let vis = Visibility::make_visibility(record, new_record);
                 (Unit::new_normalize(wi), pdf, *color, vis)
             }
-            Light::Diffuse { .. } => {todo!("diffuse sample_li")}
+            Light::Diffuse { prim_index, color, area, two_sided, .. } => {
+                let primitive = &get_objects().objs[*prim_index];
+                let (new_record, mut pdf, wi) = primitive.sample(record, u);
+                if pdf == 0f64 || (record.p - new_record.p).magnitude_squared() == 0f64 {
+                    pdf = 0f64;
+                    // return dummy values
+                    return (Unit::new_normalize(util::black()), pdf, *color, Visibility::make_visibility(record, HitRecord::make_basic(Point3::new(0f64, 0f64, 0f64), 1f64)));
+                }
+                let wi = Unit::new_normalize(new_record.p - record.p);
+                let vis = Visibility::make_visibility(record, new_record);
+                (wi, pdf, *color, vis)
+            }
         }
     }
 
@@ -110,7 +121,7 @@ impl Light {
             Light::Point { .. } => { 0. }
             Light::Spot {.. } => { 0. }
             Light::Distant { .. } => { 0. }
-            Light::Diffuse { prim_index, .. } => { Primitive::pdf(&prims[*prim_index], record, wi) }
+            Light::Diffuse { prim_index, .. } => { prims[*prim_index].pdf(record, wi) }
         }
     }
 
@@ -121,7 +132,7 @@ impl Light {
     pub fn sample_le(light: &Light, u1: &Point2<f64>, u2: &Point2<f64>, time: f64) -> (f64, f64, Ray, Vector3<f64>, Vector3<f64>) {
         match light {
             Light::Point { p, color, .. } => {
-                let ray = Ray::new_time(*p, util::rand_in_unit_sphere(u1), time);
+                let ray = Ray::new_time(*p, util::uniform_sample_sphere(u1), time);
                 let n_light = ray.dir;
                 let pdf_pos = 1f64;
                 let pdf_dir = util::uniform_sphere_pdf();

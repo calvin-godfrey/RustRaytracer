@@ -43,7 +43,8 @@ fn sample_generator_matrix(c: &[u32], a: u32, scramble: u32) -> f64 {
     (multiply_generator(c, a) ^ scramble) as f64 * 1f64 / (2i32.pow(32) as f64)
 }
 
-fn van_der_corput(n_samples_per_pixel_sample: i32, n_pixel_samples: i64, samples: &mut[f64], rng: &mut rngs::ThreadRng) {
+fn van_der_corput(n_samples_per_pixel_sample: i32, n_pixel_samples: i64, samples: &mut[f64]) {
+    let mut rng = thread_rng();
     let scramble = rng.next_u32();
     let c_van_der_corput: Vec<u32> = vec![
         0x80000000, 0x40000000, 0x20000000, 0x10000000, 0x8000000, 0x4000000,
@@ -56,17 +57,19 @@ fn van_der_corput(n_samples_per_pixel_sample: i32, n_pixel_samples: i64, samples
     let total: i64 = n_samples_per_pixel_sample as i64 * n_pixel_samples;
     gray_code_sample1(&c_van_der_corput[..], total, scramble, samples);
     for i in 0..n_pixel_samples {
-        shuffle(&mut samples[(i * n_samples_per_pixel_sample as i64) as usize..], n_samples_per_pixel_sample, 1, rng);
+        shuffle(&mut samples[(i * n_samples_per_pixel_sample as i64) as usize..], n_samples_per_pixel_sample, 1);
     }
-    shuffle(samples, n_pixel_samples as i32, n_samples_per_pixel_sample, rng);
+    shuffle(samples, n_pixel_samples as i32, n_samples_per_pixel_sample);
 }
 
-fn sobol_2d(n_samples_per_pixel_sample: i32, n_pixel_samples: i64, samples: &mut[Point2<f64>], rng: &mut rngs::ThreadRng) {
+fn sobol_2d(n_samples_per_pixel_sample: i32, n_pixel_samples: i64, samples: &mut[Point2<f64>]) {
+    let mut rng = thread_rng();
     let scramble: Point2<u32> = Point2::new(rng.next_u32(), rng.next_u32());
     let c_sobol: Vec<Vec<u32>> = vec![vec![0x80000000, 0x40000000, 0x20000000, 0x10000000, 0x8000000, 0x4000000,
     0x2000000, 0x1000000, 0x800000, 0x400000, 0x200000, 0x100000, 0x80000,
     0x40000, 0x20000, 0x10000, 0x8000, 0x4000, 0x2000, 0x1000, 0x800,
-    0x400, 0x200, 0x100, 0x80, 0x40, 0x20, 0x10, 0x8, 0x4, 0x2, 0x1], vec![0x80000000, 0xc0000000, 0xa0000000, 0xf0000000, 0x88000000, 0xcc000000,
+    0x400, 0x200, 0x100, 0x80, 0x40, 0x20, 0x10, 0x8, 0x4, 0x2, 0x1],
+    vec![0x80000000, 0xc0000000, 0xa0000000, 0xf0000000, 0x88000000, 0xcc000000,
     0xaa000000, 0xff000000, 0x80800000, 0xc0c00000, 0xa0a00000, 0xf0f00000,
     0x88880000, 0xcccc0000, 0xaaaa0000, 0xffff0000, 0x80008000, 0xc000c000,
     0xa000a000, 0xf000f000, 0x88008800, 0xcc00cc00, 0xaa00aa00, 0xff00ff00,
@@ -75,12 +78,13 @@ fn sobol_2d(n_samples_per_pixel_sample: i32, n_pixel_samples: i64, samples: &mut
 
     gray_code_sample2(&c_sobol[0], &c_sobol[1], n_samples_per_pixel_sample as i64 * n_pixel_samples, scramble, samples);
     for i in 0..n_pixel_samples {
-        shuffle(&mut samples[(i * n_samples_per_pixel_sample as i64) as usize..], n_samples_per_pixel_sample, 1, rng);
+        shuffle(&mut samples[(i * n_samples_per_pixel_sample as i64) as usize..], n_samples_per_pixel_sample, 1);
     }
-    shuffle(samples, n_pixel_samples as i32, n_samples_per_pixel_sample, rng);
+    shuffle(samples, n_pixel_samples as i32, n_samples_per_pixel_sample);
 }
 
-fn stratified_sample_1d(n_samples: i32, rng: &mut rngs::ThreadRng, jitter: bool) -> Vec<f64> {
+fn stratified_sample_1d(n_samples: i32, jitter: bool) -> Vec<f64> {
+    let mut rng = thread_rng();
     let inv_samples = 1f64 / n_samples as f64;
     let mut v: Vec<f64> = Vec::with_capacity(n_samples as usize);
     for i in 0..n_samples {
@@ -90,7 +94,8 @@ fn stratified_sample_1d(n_samples: i32, rng: &mut rngs::ThreadRng, jitter: bool)
     v
 }
 
-fn stratified_sample_2d(n_x: i32, n_y: i32, rng: &mut rngs::ThreadRng, jitter: bool) -> Vec<Point2<f64>> {
+fn stratified_sample_2d(n_x: i32, n_y: i32, jitter: bool) -> Vec<Point2<f64>> {
+    let mut rng = thread_rng();
     let dx = 1f64 / n_x as f64;
     let dy = 1f64 / n_y as f64;
     let mut v: Vec<Point2<f64>> = Vec::with_capacity((n_x * n_y) as usize);
@@ -105,7 +110,8 @@ fn stratified_sample_2d(n_x: i32, n_y: i32, rng: &mut rngs::ThreadRng, jitter: b
     v
 }
 
-fn shuffle<T: Copy>(samples: &mut [T], count: i32, n_dimensions: i32, rng: &mut rngs::ThreadRng) {
+fn shuffle<T: Copy>(samples: &mut [T], count: i32, n_dimensions: i32) {
+    let mut rng = thread_rng();
     for i in 0..count {
         let other = i + rng.gen_range(0., (count - i) as f64).floor() as i32;
         for j in 0..n_dimensions {
@@ -116,7 +122,8 @@ fn shuffle<T: Copy>(samples: &mut [T], count: i32, n_dimensions: i32, rng: &mut 
     }
 }
 
-fn latin_hyper_cube(samples: &mut[f64], n_samples: i64, n_dim: i32, rng: &mut rngs::ThreadRng) {
+fn latin_hyper_cube(samples: &mut[f64], n_samples: i64, n_dim: i32) {
+    let mut rng = thread_rng();
     let inv_samples = 1f64 / n_samples as f64;
     // generate samples
     for i in 0..n_samples {
@@ -223,7 +230,6 @@ pub struct PixelSampler {
     current_1d_dimension: i32,
     current_2d_dimension: i32,
     sampler: Sampler,
-    rng: rngs::ThreadRng
 }
 
 impl PixelSampler {
@@ -234,7 +240,7 @@ impl PixelSampler {
             samples_1d[i] = Vec::with_capacity(samples as usize);
             samples_2d[i] = Vec::with_capacity(samples as usize);
         }
-        PixelSampler { samples_1d, samples_2d, current_1d_dimension: 0, current_2d_dimension: 0, sampler: Sampler::new(samples), rng: rand::thread_rng() }
+        PixelSampler { samples_1d, samples_2d, current_1d_dimension: 0, current_2d_dimension: 0, sampler: Sampler::new(samples) }
     }
 
     pub fn start_pixel(&mut self, p: &Point2<i32>) {
@@ -268,7 +274,7 @@ impl PixelSampler {
             self.current_1d_dimension += 1;
             *ans
         } else {
-            self.rng.gen_range(0f64, 1f64)
+            thread_rng().gen_range(0f64, 1f64)
         }
     }
 
@@ -279,7 +285,7 @@ impl PixelSampler {
             self.current_2d_dimension += 1;
             *ans
         } else {
-            Point2::new(self.rng.gen_range(0f64, 1f64), self.rng.gen_range(0f64, 1f64))
+            Point2::new(thread_rng().gen_range(0f64, 1f64), thread_rng().gen_range(0f64, 1f64))
         }
     }
 }
@@ -361,16 +367,6 @@ pub enum Samplers {
     ZeroTwoSequenceSampler { pixel: PixelSampler }
 }
 
-impl Samplers {
-    fn round_count(sampler: &Samplers, n: u32) -> u32 {
-        match sampler {
-            Samplers::StratifiedSampler { .. } => {  }
-            Samplers::ZeroTwoSequenceSampler { pixel } => { return n.next_power_of_two(); }
-        }
-        n
-    }
-}
-
 impl Clone for Samplers {
     fn clone(&self) -> Self {
         match self {
@@ -384,51 +380,58 @@ impl Clone for Samplers {
 
 
 impl Samplers {
+    fn round_count(sampler: &Samplers, n: u32) -> u32 {
+        match sampler {
+            Samplers::StratifiedSampler { .. } => {  }
+            Samplers::ZeroTwoSequenceSampler { pixel } => { return n.next_power_of_two(); }
+        }
+        n
+    }
     pub fn start_pixel(s: &mut Samplers, p: &Point2<i32>) {
         match s {
             Samplers::StratifiedSampler { x_samples, y_samples, jitter_samples, pixel } => {
                 for i in 0usize..pixel.samples_1d.len() {
-                    pixel.samples_1d[i] = stratified_sample_1d((*x_samples * *y_samples) as i32, &mut pixel.rng, *jitter_samples);
-                    shuffle(&mut pixel.samples_1d[i], (*x_samples * *y_samples) as i32, 1, &mut pixel.rng);
+                    pixel.samples_1d[i] = stratified_sample_1d((*x_samples * *y_samples) as i32, *jitter_samples);
+                    shuffle(&mut pixel.samples_1d[i], (*x_samples * *y_samples) as i32, 1);
                 }
 
                 for i in 0usize..pixel.samples_2d.len() {
-                    pixel.samples_2d[i] = stratified_sample_2d(*x_samples as i32, *y_samples as i32, &mut pixel.rng, *jitter_samples);
-                    shuffle(&mut pixel.samples_2d[i], (*x_samples * *y_samples) as i32, 1, &mut pixel.rng);
+                    pixel.samples_2d[i] = stratified_sample_2d(*x_samples as i32, *y_samples as i32, *jitter_samples);
+                    shuffle(&mut pixel.samples_2d[i], (*x_samples * *y_samples) as i32, 1);
                 }
 
                 for i in 0usize..pixel.sampler.samples_1d_sizes.len() {
                     for j in 0i64..pixel.sampler.samples_per_pixel {
                         let count: i64 = pixel.sampler.samples_2d_sizes[i] as i64;
-                        let v = stratified_sample_1d(count as i32, &mut pixel.rng, *jitter_samples);
+                        let v = stratified_sample_1d(count as i32, *jitter_samples);
                         for k in (j * count as i64) as usize..((j + 1) * count) as usize {
                             pixel.sampler.sample_array_1d[i][k] = v[k - (j * count) as usize];
                         }
-                        shuffle(&mut pixel.sampler.sample_array_1d[i][(j * count) as usize .. ((j + 1) * count) as usize], count as i32, 1, &mut pixel.rng);
+                        shuffle(&mut pixel.sampler.sample_array_1d[i][(j * count) as usize .. ((j + 1) * count) as usize], count as i32, 1);
                     }
                 }
                 for i in 0..pixel.sampler.samples_2d_sizes.len() {
                     for j in 0usize..pixel.sampler.samples_per_pixel as usize {
                         let count = pixel.sampler.samples_2d_sizes[i];
                         let samples = &mut pixel.sampler.sample_array_1d[i][j * (count as usize)..(j+1)*(count as usize)];
-                        latin_hyper_cube(samples, count as i64, 2, &mut pixel.rng);
+                        latin_hyper_cube(samples, count as i64, 2);
                     }
                 }
                 pixel.start_pixel(p);
             }
             Samplers::ZeroTwoSequenceSampler { pixel } => {
                 for i in 0usize..pixel.samples_1d.len() {
-                    van_der_corput(1, pixel.sampler.samples_per_pixel, &mut pixel.samples_1d[i][..], &mut pixel.rng);
+                    van_der_corput(1, pixel.sampler.samples_per_pixel, &mut pixel.samples_1d[i][..]);
                 }
                 for i in 0usize..pixel.samples_2d.len() {
-                    sobol_2d(1, pixel.sampler.samples_per_pixel, &mut pixel.samples_2d[i][..], &mut pixel.rng);
+                    sobol_2d(1, pixel.sampler.samples_per_pixel, &mut pixel.samples_2d[i][..]);
                 }
                 // generate
                 for i in 0usize..pixel.sampler.samples_1d_sizes.len() {
-                    van_der_corput(pixel.sampler.samples_1d_sizes[i], pixel.sampler.samples_per_pixel, &mut pixel.sampler.sample_array_1d[i][..], &mut pixel.rng)
+                    van_der_corput(pixel.sampler.samples_1d_sizes[i], pixel.sampler.samples_per_pixel, &mut pixel.sampler.sample_array_1d[i][..]);
                 }
                 for i in 0usize..pixel.sampler.samples_2d_sizes.len() {
-                    sobol_2d(pixel.sampler.samples_2d_sizes[i], pixel.sampler.samples_per_pixel, &mut pixel.sampler.sample_array_2d[i][..], &mut pixel.rng);
+                    sobol_2d(pixel.sampler.samples_2d_sizes[i], pixel.sampler.samples_per_pixel, &mut pixel.sampler.sample_array_2d[i][..]);
                 }
             }
         }

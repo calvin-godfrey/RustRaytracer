@@ -130,15 +130,15 @@ pub enum Bxdf {
 impl Bxdf {
     pub fn matches_flag(bxdf: &Bxdf, flag: u8) -> bool {
         match bxdf {
-            Bxdf::ScaledBxdf { inner, scale } => { Bxdf::matches_flag(inner.as_ref(), flag) }
-            Bxdf::SpecularReflection { color, fresnel, bxdf_type } => {matches_flags(*bxdf_type, flag)}
-            Bxdf::SpecularTransmission { color, eta_a, eta_b, fresnel, mode, bxdf_type } => {matches_flags(*bxdf_type, flag)}
-            Bxdf::LambertianReflection { color, bxdf_type } => {matches_flags(*bxdf_type, flag)}
-            Bxdf::OrenNayer { color, a, b, bxdf_type } => {matches_flags(*bxdf_type, flag)}
-            Bxdf::MicrofacetReflection { color, fresnel, mfd, bxdf_type } => {matches_flags(*bxdf_type, flag)}
-            Bxdf::MicrofacetTransmission { color, fresnel, mfd, eta_a, eta_b, mode, bxdf_type } => {matches_flags(*bxdf_type, flag)}
-            Bxdf::FresnelBlend { r_s, r_d, mfd, bxdf_type } => {matches_flags(*bxdf_type, flag)}
-            Bxdf::FresnelSpecular { r, t, eta_a, eta_b, mode, bxdf_type } => {matches_flags(*bxdf_type, flag)}
+            Bxdf::ScaledBxdf { inner, .. } => { Bxdf::matches_flag(inner.as_ref(), flag) }
+            Bxdf::SpecularReflection { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
+            Bxdf::SpecularTransmission { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
+            Bxdf::LambertianReflection { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
+            Bxdf::OrenNayer { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
+            Bxdf::MicrofacetReflection { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
+            Bxdf::MicrofacetTransmission { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
+            Bxdf::FresnelBlend { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
+            Bxdf::FresnelSpecular {bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
         }
     }
 
@@ -177,17 +177,18 @@ impl Bxdf {
                 color * (INV_PI * (a + b * max_cos * sin_alpha * tan_beta))
             }
             Bxdf::MicrofacetReflection { color, fresnel, mfd, bxdf_type } => {
-                let cos_theta_o = abs_cos_theta(wo);
-                let cos_theta_i = abs_cos_theta(wi);
-                let wh: Vector3<f64> = wi + wo; // half angle, should equal normal
+                let cos_theta_o = util::clamp(cos_theta(wo), 0.0, wo.magnitude());
+                let cos_theta_i = util::clamp(cos_theta(wi), 0.0, wi.magnitude());
+                let wh: Vector3<f64> = wi + wo; // half angle
                 if cos_theta_i == 0. || cos_theta_o == 0. {
                     return util::black();
                 }
-                if wh.abs().min() == 0. {
+                if wh == util::black() {
                     return util::black();
                 }
+                let cos = wi.dot(&(if wh.z > 0. { wh } else { -wh }));
+                let f = Fresnel::evaluate(&fresnel, cos/wh.magnitude());
                 let wh = Unit::new_normalize(wh);
-                let f = Fresnel::evaluate(&fresnel, wi.dot(&wh));
                 let comp1: Vector3<f64> = color * MicrofacetDistribution::d(&mfd, &wh) * MicrofacetDistribution::g(&mfd, wo, wi);
                 comp1.component_mul(&f.scale(1f64 / (4f64 * cos_theta_i * cos_theta_o)))
             }

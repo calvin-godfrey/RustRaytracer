@@ -4,12 +4,14 @@ use std::sync::Arc;
 use crate::hittable::*;
 use crate::consts::*;
 use crate::material::materials::{Material, Texture};
+use crate::sampler::Samplers;
 use crate::util;
 use crate::geometry;
+use crate::Integrator;
 use crate::primitive::Primitive;
 
 // #[allow(dead_code)]
-// pub fn make_world() -> (geometry::Camera, BvhNode, Vec<Mesh>, Vec<Primitive>, Vec<usize>, Vec<Material>, Vec<Texture>, String) {
+// pub fn make_world() -> (geometry::Camera, String) {
 //     assert!(AMBIENT_LIGHT == true);
 //     let from: Point3<f64> = Point3::new(13., 2.,3.);
 //     let to: Point3<f64> = Point3::new(0., 0., 0.0);
@@ -17,17 +19,15 @@ use crate::primitive::Primitive;
 
 //     let camera = geometry::Camera::new(from, to, up, ASPECT_RATIO, 20., 0.16, 10.);
 
-//     let mut world: Vec<Primitive> = Vec::new();
-//     let mut textures: Vec<Texture> = Vec::new();
-//     let mut materials: Vec<Material> = Vec::new();
-//     textures.push(Texture::new_solid_color(Vector3::new(201., 201., 201.).scale(1./256.)));
-//     textures.push(Texture::new_solid_color(Vector3::new(51., 75.5, 25.5).scale(1./256.)));
-//     textures.push(Texture::new_checkered(0, 1, 4.));
-//     materials.push(Material::make_matte(2, 0., 0));
-//     let ground = Primitive::new_sphere(Point3::new(0., -10000., 0.), 10000., 0);
-//     // let ground = Primitive::new_sphere(Point3::new(0., -10000., 0.), 10000., Arc::new(Material::new_lambertian(Texture::new_perlin(4.))));
+//     let objects = geometry::get_objects_mut();
 
-//     world.push(ground);
+//     objects.textures.push(Texture::new_solid_color(Vector3::new(201., 201., 201.).scale(1./256.)));
+//     objects.textures.push(Texture::new_solid_color(Vector3::new(51., 75.5, 25.5).scale(1./256.)));
+//     objects.textures.push(Texture::new_checkered(0, 1, 4.));
+//     objects.materials.push(Material::make_matte(2, 0., 0));
+//     let ground = Primitive::new_sphere(Point3::new(0., -10000., 0.), 10000., 0);
+
+//     objects.objs.push(ground);
 
 //     for a in -11..11 {
 //         for b in -11..11 {
@@ -37,55 +37,55 @@ use crate::primitive::Primitive;
 //                 if mat < 0.6 { // matte
 //                     let color: Vector3<f64> = Vector3::new(255. * util::rand() * util::rand_range(0.4, 0.8), 255. * util::rand() * util::rand_range(0.4, 0.8), 255. * util::rand() * util::rand_range(0.4, 0.8)).scale(1./256.);
 //                     let texture = Texture::new_solid_color(color);
-//                     textures.push(texture);
-//                     let mat = Material::make_matte(textures.len() - 1, 0., 0);
-//                     materials.push(mat);
-//                     world.push(Primitive::new_sphere(center, 0.2, materials.len() - 1));
+//                     objects.textures.push(texture);
+//                     let mat = Material::make_matte(objects.textures.len() - 1, 0., 0);
+//                     objects.materials.push(mat);
+//                     objects.objs.push(Primitive::new_sphere(center, 0.2, objects.materials.len() - 1));
 //                 } else if mat < 0.86 { // metal
 //                     let color: Vector3<f64> = Vector3::new(util::rand_range(30., 200.), util::rand_range(30., 200.), util::rand_range(30., 200.)).scale(1./256.);
-//                     textures.push(Texture::new_solid_color(color));
-//                     let mat = Material::make_mirror(textures.len() - 1, 0);
-//                     materials.push(mat);
-//                     world.push(Primitive::new_sphere(center, 0.2, materials.len() - 1));
+//                     objects.textures.push(Texture::new_solid_color(color));
+//                     let mat = Material::make_mirror(objects.textures.len() - 1, 0);
+//                     objects.materials.push(mat);
+//                     objects.objs.push(Primitive::new_sphere(center, 0.2, objects.materials.len() - 1));
 //                 } else { // glass
 //                     let r = util::rand_range(0.5, 1.);
 //                     let g = util::rand_range(0.5, 1.);
 //                     let b = util::rand_range(0.5, 1.);
-//                     textures.push(Texture::new_solid_color(Vector3::new(r, g, b)));
-//                     let mat = Material::make_glass(textures.len() - 1, textures.len() - 1, 0., 0., util::rand_range(1.2, 1.8), 0, true);
-//                     materials.push(mat);
-//                     world.push(Primitive::new_sphere(center, 0.2, materials.len() - 1));
+//                     objects.textures.push(Texture::new_solid_color(Vector3::new(r, g, b)));
+//                     let mat = Material::make_glass(objects.textures.len() - 1, objects.textures.len() - 1, 0., 0., util::rand_range(1.2, 1.8), 0, true);
+//                     objects.materials.push(mat);
+//                     objects.objs.push(Primitive::new_sphere(center, 0.2, objects.materials.len() - 1));
 //                 }
 //             }
 //         }
 //     }
 
 //     let new_texture = Texture::new_perlin(6.);
-//     textures.push(new_texture);
-//     let perlin_mat = Material::make_matte(textures.len() - 1, 45., 0);
-//     materials.push(perlin_mat);
-//     world.push(Primitive::new_sphere(Point3::new(-4., 1., 0.), 1., materials.len() - 1));
+//     objects.textures.push(new_texture);
+//     let perlin_mat = Material::make_matte(objects.textures.len() - 1, 45., 0);
+//     objects.materials.push(perlin_mat);
+//     objects.objs.push(Primitive::new_sphere(Point3::new(-4., 1., 0.), 1., objects.materials.len() - 1));
 
-//     textures.push(Texture::new_solid_color(util::white()));
-//     materials.push(Material::make_glass(textures.len() - 1, textures.len() - 1, 0., 0., 1.3, 0, true));
-//     world.push(Primitive::new_sphere(Point3::new(0., 1., 0.), 1., materials.len() - 1));
+//     objects.textures.push(Texture::new_solid_color(util::white()));
+//     objects.materials.push(Material::make_glass(objects.textures.len() - 1, objects.textures.len() - 1, 0., 0., 1.3, 0, true));
+//     objects.objs.push(Primitive::new_sphere(Point3::new(0., 1., 0.), 1., objects.materials.len() - 1));
 
-//     textures.push(Texture::new_solid_color(Vector3::new(223.5, 85., 32.5).scale(1./256.)));
-//     textures.push(Texture::new_solid_color(util::black()));
-//     textures.push(Texture::new_solid_color(Vector3::new(0.1, 0., 0.)));
-//     materials.push(Material::make_metal(textures.len() - 3, textures.len() - 2, textures.len() - 1, textures.len() - 1, textures.len() - 1, 0, true));
-//     world.push(Primitive::new_sphere(Point3::new(4., 1., 0.), 1., materials.len() - 1));
+//     objects.textures.push(Texture::new_solid_color(Vector3::new(223.5, 85., 32.5).scale(1./256.)));
+//     objects.textures.push(Texture::new_solid_color(util::black()));
+//     objects.textures.push(Texture::new_solid_color(Vector3::new(0.02, 0., 0.)));
+//     objects.materials.push(Material::make_metal(objects.textures.len() - 3, objects.textures.len() - 2, objects.textures.len() - 1, objects.textures.len() - 1, objects.textures.len() - 1, 0, true));
+//     objects.objs.push(Primitive::new_sphere(Point3::new(4., 1., 0.), 1., objects.materials.len() - 1));
 
-//     let len = world.len();
+//     let len = objects.objs.len();
 //     let mut indices: Vec<usize> = (0usize..len).collect();
-//     let node = BvhNode::new(&world, &mut indices, 0, len, 0., 0.);
+//     let node = BvhNode::new(&objects.objs, &mut indices, 0, len, 0., 0.);
+//     objects.node = node;
 
-//     let lights = vec![];
-//     (camera, node, vec![], world, lights, materials, textures, "sphere_world.png".to_string())
+//     (camera, "sphere_world.png".to_string())
 // }
 
 #[allow(dead_code)]
-pub fn cornell_box() -> (geometry::Camera, BvhNode, String) {
+pub fn cornell_box() -> (String, Integrator) {
 
     let from = Point3::new(278., 278., -800.);
     let to = Point3::new(278., 278., 0.);
@@ -94,6 +94,7 @@ pub fn cornell_box() -> (geometry::Camera, BvhNode, String) {
     let camera = geometry::Camera::new_motion_blur(from, to, up, ASPECT_RATIO, 40., 0., 10., 0., 1.);
 
     let objects = geometry::get_objects_mut();
+    objects.lights.push(2);
     objects.textures.push(Texture::new_solid_color(Vector3::new(0.65, 0.05, 0.05))); // red
     objects.textures.push(Texture::new_solid_color(Vector3::new(0.73, 0.73, 0.73))); // white
     objects.textures.push(Texture::new_solid_color(Vector3::new(0.12, 0.45, 0.15))); // green
@@ -127,24 +128,23 @@ pub fn cornell_box() -> (geometry::Camera, BvhNode, String) {
     objects.objs.extend(cube2.get_sides());
     
     let len = objects.objs.len();
-    let mut indices: Vec<usize> = (0usize..len).collect();
-
-    let lights = vec![2usize];
-    
+    let mut indices: Vec<usize> = (0usize..len).collect();    
     let node = BvhNode::new(&objects.objs, &mut indices, 0, len, 0., 1.);
-    (camera, node, "cornell_box.png".to_string())
+    objects.node = node;
+    ("cornell_box.png".to_string(), Integrator::BasicSampler{ camera })
 }
 
 // #[allow(dead_code)]
-// pub fn with_everything() -> (geometry::Camera, BvhNode, Vec<Mesh>, Vec<Primitive>, Vec<usize>, Vec<Material>, Vec<Texture>, String) {
+// pub fn with_everything() -> (geometry::Camera, String) {
 //     let from = Point3::new(478., 278., -600.);
 //     let to = Point3::new(278., 278., 0.);
 //     let up = Vector3::new(0., 1., 0.);
 
 //     let camera = geometry::Camera::new_motion_blur(from, to, up, ASPECT_RATIO, 40., 0., 10., 0., 1.);
-//     let mut textures: Vec<Texture> = Vec::new();
-//     let mut materials: Vec<Material> = Vec::new();
-//     let mut objs: Vec<Primitive> = Vec::new();
+//     let objects = geometry::get_objects_mut();
+//     let textures = &mut objects.textures;
+//     let materials = &mut objects.materials;
+//     let objs = &mut objects.objs;
 //     textures.push(Texture::new_solid_color(Vector3::new(122.4, 211.7, 135.3).scale(1./256.))); // ground
 //     materials.push(Material::make_matte(0, 0., 0));
 //     let boxes_per_side = 20;
@@ -165,11 +165,11 @@ pub fn cornell_box() -> (geometry::Camera, BvhNode, String) {
 //     textures.push(Texture::new_solid_color(Vector3::new(7., 7., 7.))); // light
 //     materials.push(Material::make_light(textures.len() - 1));
 //     objs.push(Primitive::new_xz_rect(123., 147., 423., 412., 554., materials.len() - 1));
-//     let lights = vec![objs.len() - 1];
+//     objects.lights.push(objs.len() - 1);
 
-//     textures.push(Texture::new_solid_color(Vector3::new(178.5, 76.5, 25.5).scale(1./256.))); // moving sphere
-//     materials.push(Material::make_matte(0, 0., 0));
-//     objs.push(Primitive::new_moving_sphere(Point3::new(400., 400., 200.), Point3::new(430., 400., 200.),0., 1., 50., materials.len() - 1));
+//     // textures.push(Texture::new_solid_color(Vector3::new(178.5, 76.5, 25.5).scale(1./256.))); // moving sphere
+//     // materials.push(Material::make_matte(0, 0., 0));
+//     // objs.push(Primitive::new_moving_sphere(Point3::new(400., 400., 200.), Point3::new(430., 400., 200.),0., 1., 50., materials.len() - 1));
 
 //     textures.push(Texture::new_solid_color(util::white()));
 //     materials.push(Material::make_glass(textures.len() - 1, textures.len() - 1, 0., 0., 1.5, 0, true));
@@ -181,12 +181,6 @@ pub fn cornell_box() -> (geometry::Camera, BvhNode, String) {
 //     textures.push(Texture::new_solid_color(Vector3::new(0.1, 0., 0.)));
 //     materials.push(Material::make_metal(textures.len() - 3, textures.len() - 2, textures.len() - 1, textures.len() - 1, textures.len() - 1, 0, true));
 //     objs.push(Primitive::new_sphere(Point3::new(0., 150., 145.), 50., materials.len() - 1));
-
-//      // TODO: SubstrateMaterial
-//     // objs.push(Primitive::new_sphere(Point3::new(360., 150., 145.), 70., materials.len() - 2));
-//     // textures.push(Texture::new_solid_color(Vector3::new(81., 132., 249.6)));
-//     // materials.push(Material::new_lambertian(textures.len() - 1));
-//     // objs.push(Primitive::new_sphere(Point3::new(360., 150., 145.), 70., 3));
     
 //     textures.push(Texture::new_texture("data/earthmap.jpg")); // textured sphere
 //     materials.push(Material::make_matte(textures.len() - 1, 0., 0));
@@ -208,12 +202,18 @@ pub fn cornell_box() -> (geometry::Camera, BvhNode, String) {
 
 //     let len = objs.len();
 //     let mut indices: Vec<usize> = (0usize..len).collect();
-//     (camera, BvhNode::new(&objs, &mut indices, 0, len, 0., 1.), vec![], objs, lights, materials, textures, "old_everything.png".to_string())
+//     let node =  BvhNode::new(&objs, &mut indices, 0, len, 0., 1.);
+//     objects.node = node;
+//     (camera, "old_everything.png".to_string())
 // }
 
 // #[allow(dead_code)]
-// pub fn dragon(i: i32) -> (geometry::Camera, BvhNode, Vec<Mesh>, Vec<Primitive>, Vec<usize>, Vec<Material>, Vec<Texture>, String) {
-//     let mut meshes = vec![];
+// pub fn dragon(i: i32) -> (geometry::Camera, String) {
+//     let objects = geometry::get_objects_mut();
+//     let texts = &mut objects.textures;
+//     let mats = &mut objects.materials;
+//     let world = &mut objects.objs;
+//     let meshes = &mut objects.meshes;
 //     let sand = Vector3::new(0.761, 0.698, 0.502).scale(1. / 0.761);
 //     let transform = Similarity3::new(Vector3::new(0., 0., 0.), Vector3::new(0., 0., 0.), 10.);
 //     let mesh = Mesh::new("data/dragon/dragon.obj", Projective3::from_matrix_unchecked(transform.to_homogeneous()), 1);
@@ -226,10 +226,6 @@ pub fn cornell_box() -> (geometry::Camera, BvhNode, String) {
 //     let up: Vector3<f64> = Vector3::new(0., 1., 0.);
 
 //     let camera = geometry::Camera::new(from, to, up, ASPECT_RATIO, 70., 0.0, 10.);
-
-//     let mut world: Vec<Primitive> = Vec::new();
-//     let mut texts: Vec<Texture> = Vec::new();
-//     let mut mats: Vec<Material> = Vec::new();
 
 //     let light_gray = Vector3::new(0.4, 0.15, 0.15).scale(2.);
 //     let dark_gray = Vector3::new(0.15, 0.15, 0.4).scale(2.);
@@ -253,60 +249,17 @@ pub fn cornell_box() -> (geometry::Camera, BvhNode, String) {
 //     let len = world.len();
 //     let mut indices: Vec<usize> = (0usize..len).collect();
 //     let bvh = BvhNode::new(&world, &mut indices, 0, len, 0., 1.);
-//     (camera, bvh, meshes, world, vec![], mats, texts, path)
+//     objects.node = bvh;
+//     (camera, path)
 // }
 
 // #[allow(dead_code)]
-// pub fn plastic_dragon(i: i32) -> (geometry::Camera, BvhNode, Vec<Mesh>, Vec<Primitive>, Vec<usize>, Vec<Material>, Vec<Texture>, String) {
-//     let mut meshes = vec![];
-//     let transform = Similarity3::new(Vector3::new(0., 0., 0.), Vector3::new(0., 0., 0.), 10.);
-//     let mesh = Mesh::new("data/dragon/dragon.obj", Projective3::from_matrix_unchecked(transform.to_homogeneous()), 1);
-//     meshes.push(mesh);
-//     let radians = (i as f64) * PI / 180.;
-//     let path = format!("dragon_{}.png", i);
-//     let r = 82.26f64.sqrt();
-//     let from: Point3<f64> = Point3::new(r * (radians + PI / 4.4).sin(), 4., r * (radians + PI / 4.4).cos());
-//     // let to: Point3<f64> = Point3::new(0., -0.15, -0.08);
-//     let to: Point3<f64> = Point3::new(0.,1.1, 4.4);
-//     let up: Vector3<f64> = Vector3::new(0., 1., 0.);
-
-//     let camera = geometry::Camera::new(from, to, up, ASPECT_RATIO, 15., 0.0, 10.);
-
-//     let mut world: Vec<Primitive> = Vec::new();
-//     let mut texts: Vec<Texture> = Vec::new();
-//     let mut mats: Vec<Material> = Vec::new();
-
-//     let light_gray = Vector3::new(0.4, 0.15, 0.15).scale(2.);
-//     let dark_gray = Vector3::new(0.15, 0.15, 0.4).scale(2.);
-//     let temp_len = texts.len();
-//     texts.push(Texture::new_solid_color(light_gray));
-//     texts.push(Texture::new_solid_color(dark_gray));
-//     texts.push(Texture::new_checkered(temp_len, temp_len+1, 0.1));
-//     let purple = Vector3::new(0.1514, 0.0139, 0.3765).scale(0.4 / 0.3765);
-//     let spec_color = util::white().scale(1.);
-//     texts.push(Texture::new_solid_color(purple));
-//     texts.push(Texture::new_solid_color(spec_color));
-//     mats.push(Material::make_matte(2, 0f64, 0));
-//     mats.push(Material::make_plastic(3, 4, 0, 0.0, true));
-//     world.push(Primitive::new_xz_rect(-10000., -10000., 10000., 10000., -2.83, 0));
-
-//     let triangles = Mesh::generate_triangles(&meshes, 0, 1);
-//     for tri in triangles {
-//         world.push(tri);
-//     }
-//     texts.push(Texture::new_solid_color(Vector3::new(10., 10., 10.)));
-//     mats.push(Material::make_light(5));
-//     world.push(Primitive::new_xz_rect(-5., -5., 5., 5., 15., 2));
-
-//     let len = world.len();
-//     let mut indices: Vec<usize> = (0usize..len).collect();
-//     let bvh = BvhNode::new(&world, &mut indices, 0, len, 0., 1.);
-//     (camera, bvh, meshes, world, vec![], mats, texts, path)
-// }
-
-// #[allow(dead_code)]
-// pub fn glass_dragon(i: i32, urough: f64, vrough: f64, index: f64) -> (geometry::Camera, BvhNode, Vec<Mesh>, Vec<Primitive>, Vec<usize>, Vec<Material>, Vec<Texture>, String) {
-//     let mut meshes = vec![];
+// pub fn plastic_dragon(i: i32) -> (geometry::Camera, String) {
+//     let objects = geometry::get_objects_mut();
+//     let texts = &mut objects.textures;
+//     let mats = &mut objects.materials;
+//     let world = &mut objects.objs;
+//     let meshes = &mut objects.meshes;
 //     let transform = Similarity3::new(Vector3::new(0., 0., 0.), Vector3::new(0., 0., 0.), 10.);
 //     let mesh = Mesh::new("data/dragon/dragon.obj", Projective3::from_matrix_unchecked(transform.to_homogeneous()), 1);
 //     meshes.push(mesh);
@@ -319,9 +272,53 @@ pub fn cornell_box() -> (geometry::Camera, BvhNode, String) {
 
 //     let camera = geometry::Camera::new(from, to, up, ASPECT_RATIO, 70., 0.0, 10.);
 
-//     let mut world: Vec<Primitive> = Vec::new();
-//     let mut texts: Vec<Texture> = Vec::new();
-//     let mut mats: Vec<Material> = Vec::new();
+//     let light_gray = Vector3::new(0.4, 0.15, 0.15).scale(2.);
+//     let dark_gray = Vector3::new(0.15, 0.15, 0.4).scale(2.);
+//     let temp_len = texts.len();
+//     texts.push(Texture::new_solid_color(light_gray));
+//     texts.push(Texture::new_solid_color(dark_gray));
+//     texts.push(Texture::new_checkered(temp_len, temp_len+1, 0.1));
+//     let purple = Vector3::new(0.1514, 0.0139, 0.3765).scale(0f64); //.scale(0.5 / 0.3765);
+//     let spec_color = util::white().scale(0.7);
+//     texts.push(Texture::new_solid_color(purple));
+//     texts.push(Texture::new_solid_color(spec_color));
+//     mats.push(Material::make_matte(2, 0f64, 0));
+//     mats.push(Material::make_plastic(3, 4, 0, 0.03, true));
+//     // world.push(Primitive::new_xz_rect(-10000., -10000., 10000., 10000., -2.83, 0));
+
+//     let triangles = Mesh::generate_triangles(&meshes, 0, 1);
+//     for tri in triangles {
+//         world.push(tri);
+//     }
+//     texts.push(Texture::new_solid_color(Vector3::new(10., 10., 10.).scale(0.5)));
+//     mats.push(Material::make_light(5));
+//     world.push(Primitive::new_xz_rect(-5., -5., 5., 5., 15., 2));
+
+//     let len = world.len();
+//     let mut indices: Vec<usize> = (0usize..len).collect();
+//     let bvh = BvhNode::new(&world, &mut indices, 0, len, 0., 1.);
+//     objects.node = bvh;
+//     (camera, path)
+// }
+
+// #[allow(dead_code)]
+// pub fn glass_dragon(i: i32, urough: f64, vrough: f64, index: f64) -> (geometry::Camera, String) {
+//     let objects = geometry::get_objects_mut();
+//     let texts = &mut objects.textures;
+//     let mats = &mut objects.materials;
+//     let world = &mut objects.objs;
+//     let meshes = &mut objects.meshes;
+//     let transform = Similarity3::new(Vector3::new(0., 0., 0.), Vector3::new(0., 0., 0.), 10.);
+//     let mesh = Mesh::new("data/dragon/dragon.obj", Projective3::from_matrix_unchecked(transform.to_homogeneous()), 1);
+//     meshes.push(mesh);
+//     let radians = (i as f64) * PI / 180.;
+//     let path = format!("dragon_{}.png", i);
+//     let r = 82.26f64.sqrt();
+//     let from: Point3<f64> = Point3::new(r * (radians + PI / 4.4).sin(), 4., r * (radians + PI / 4.4).cos());
+//     let to: Point3<f64> = Point3::new(0., -0.15, -0.08);
+//     let up: Vector3<f64> = Vector3::new(0., 1., 0.);
+
+//     let camera = geometry::Camera::new(from, to, up, ASPECT_RATIO, 70., 0.0, 10.);
 
 //     let light_gray = Vector3::new(0.4, 0.15, 0.15).scale(2.);
 //     let dark_gray = Vector3::new(0.15, 0.15, 0.4).scale(2.);
@@ -347,7 +344,8 @@ pub fn cornell_box() -> (geometry::Camera, BvhNode, String) {
 //     let len = world.len();
 //     let mut indices: Vec<usize> = (0usize..len).collect();
 //     let bvh = BvhNode::new(&world, &mut indices, 0, len, 0., 1.);
-//     (camera, bvh, meshes, world, vec![], mats, texts, path)
+//     objects.node = bvh;
+//     (camera, path)
 // }
 
 // #[allow(dead_code)]
