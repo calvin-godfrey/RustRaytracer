@@ -2,7 +2,7 @@ use nalgebra::base::{Unit, Vector3, Vector2};
 use nalgebra::geometry::{Projective3, Point3};
 use std::cmp::Ordering;
 use std::sync::Arc;
-use crate::geometry::Ray;
+use crate::geometry::{Ray, get_objects};
 use crate::parser;
 use crate::util;
 use crate::primitive::Primitive;
@@ -111,7 +111,10 @@ impl HitRecord {
     /**
     Returns the emitted radiance at a surface point (if any)
     */
-    pub fn le(&self, w: &Vector3<f64>, primitives: &[Primitive], lights: &[Light]) -> Vector3<f64> {
+    pub fn le(&self, w: &Vector3<f64>) -> Vector3<f64> {
+        let objects = get_objects();
+        let primitives = &objects.objs;
+        let lights = &objects.lights;
         let prim = &primitives[self.prim_index];
         if prim.get_light_index() == std::usize::MAX {
             util::black()

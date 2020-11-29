@@ -94,12 +94,11 @@ pub fn cornell_box() -> (String, Integrator) {
     let camera = geometry::Camera::new_motion_blur(from, to, up, ASPECT_RATIO, 40., 0., 10., 0., 1.);
 
     let objects = geometry::get_objects_mut();
-    objects.lights.push(2);
     objects.textures.push(Texture::new_solid_color(Vector3::new(0.65, 0.05, 0.05))); // red
     objects.textures.push(Texture::new_solid_color(Vector3::new(0.73, 0.73, 0.73))); // white
     objects.textures.push(Texture::new_solid_color(Vector3::new(0.12, 0.45, 0.15))); // green
-    objects.textures.push(Texture::new_solid_color(Vector3::new(7., 7., 7.).scale(4.))); // light
-
+    objects.textures.push(Texture::new_solid_color(Vector3::new(28.0, 28.0, 28.0))); // that one
+    
     objects.materials.push(Material::make_matte(0, 0., 0));
     objects.materials.push(Material::make_matte(1, 0., 0));
     objects.materials.push(Material::make_matte(2, 0., 0));
@@ -112,6 +111,8 @@ pub fn cornell_box() -> (String, Integrator) {
     objects.objs.push(Primitive::new_flip_face(Box::new(Primitive::new_xz_rect(0., 0., 555., 555., 555., 1))));
     objects.objs.push(Primitive::new_flip_face(Box::new(Primitive::new_xy_rect(0., 0., 555., 555., 555., 1))));
     
+    // let light = crate::light::Light::make_diffuse_light(2, Projective3::identity(), Vector3::new(28.0, 28.0, 28.0), 1, false);
+    // objects.lights.push(light);
 
     let first_translate = Projective3::from_matrix_unchecked(Matrix4::identity().append_translation(&Vector3::new(265., 0., 295.)));
     let second_translate = Projective3::from_matrix_unchecked(Matrix4::identity().append_translation(&Vector3::new(130., 0., 65.)));

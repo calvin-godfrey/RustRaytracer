@@ -221,8 +221,7 @@ impl Primitive {
     */
     pub fn sample(&self, in_record: &HitRecord, u: &Point2<f64>) -> (HitRecord, f64, Vector3<f64>) {
         // TODO: Sample based on visible area
-        let record = self.sample_area(u);
-        let mut pdf = self.const_pdf();
+        let (record, mut pdf) = self.sample_area(u);
         let wi: Vector3<f64> = record.p - in_record.p;
         if wi.magnitude_squared() == 0f64 {
             pdf = 0f64;
@@ -249,14 +248,17 @@ impl Primitive {
         // dist.magnitude_squared() / (self.area() * new_record.n.dot(&-dir).abs())
     }
 
-    pub fn sample_area(&self, u: &Point2<f64>) -> HitRecord {
+    /**
+    returns HitRecord, pdf
+    */
+    pub fn sample_area(&self, u: &Point2<f64>) -> (HitRecord, f64) {
         // TODO: Use the better sample method for spheres
         match self {
             Primitive::Sphere { r, .. } => {
                 let p_obj = Point3::new(0f64, 0f64, 0f64) + *r * util::uniform_sample_sphere(u);
                 let vp = p_obj - Point3::new(0f64, 0f64, 0f64);
                 let record = HitRecord::make_normal(p_obj, Unit::new_normalize(vp));
-                record
+                (record, 1f64 / self.area())
             }
             Primitive::Triangle { mesh_index, ind, bounding_box, mat_index, light_index } => {
                 let meshes = &get_objects().meshes;
@@ -273,27 +275,27 @@ impl Primitive {
                 } else {
                     record.n = Unit::new_normalize((p1 - p0).cross(&(p2 - p0)));
                 }
-                record
+                (record, 1f64 / self.area())
             }
             Primitive::XYRect { x0, y0, x1, y1, k, .. } => {
                 let n = Unit::new_normalize(Vector3::new(0f64, 0f64, 1f64));
                 let p = Point3::new(x0 + u[0] * (x1 - x0), y0 + u[1] * (y1 - y0), *k);
-                HitRecord::make_normal(p, n)
+                (HitRecord::make_normal(p, n), 1f64/self.area())
             }
             Primitive::XZRect { x0, z0, x1, z1, k, .. } => {
                 let n = Unit::new_normalize(Vector3::new(0f64, 1f64, 0f64));
                 let p = Point3::new(x0 + u[0] * (x1 - x0), *k, z0 + u[1] * (z1 - z0));
-                HitRecord::make_normal(p, n)
+                (HitRecord::make_normal(p, n), 1f64/self.area())
             }
             Primitive::YZRect { y0, z0, y1, z1, k, .. } => {
                 let n = Unit::new_normalize(Vector3::new(1f64, 0f64, 0f64));
                 let p = Point3::new(*k, y0 + u[0] * (y1 - y0), z0 + u[1] * (z1 - z0));
-                HitRecord::make_normal(p, n)
+                (HitRecord::make_normal(p, n), 1f64/self.area())
             }
             Primitive::FlipFace { obj } => { 
-                let mut record = obj.as_ref().sample_area(u);
+                let (mut record, pdf) = obj.as_ref().sample_area(u);
                 record.n = -record.n;
-                record
+                (record, pdf)
              }
         }
     }

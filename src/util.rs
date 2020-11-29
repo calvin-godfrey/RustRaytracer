@@ -65,6 +65,18 @@ pub fn uniform_sample_triangle(u: &Point2<f64>) -> Point2<f64> {
     Point2::new(1f64 - s0, u[1] * s0)
 }
 
+// uniform sample triangle pdf is 1/area
+
+pub fn cosine_sample_hemisphere(u: &Point2<f64>) -> Vector3<f64> {
+    let d = concentric_sample_disk(u);
+    let z = 0f64.max(1f64 - d.x * d.x - d.y * d.y).sqrt();
+    Vector3::new(d.x, d.y, z)
+}
+
+pub fn cosine_hemisphere_pdf(cos_theta: f64) -> f64 {
+    cos_theta * INV_PI
+}
+
 pub fn concentric_sample_disk(u: &Point2<f64>) -> Point2<f64> {
     let u_offset = 2f64 * u - Vector2::new(1f64, 1f64);
     if u_offset.x == 0f64 && u_offset.y == 0f64 {

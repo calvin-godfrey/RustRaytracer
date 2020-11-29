@@ -67,7 +67,7 @@ fn tile_multithread(path: String, integrator: Integrator) {
     let tiles_arc: Arc<Mutex<Vec<Vec<i32>>>> = Arc::new(Mutex::new(started_tiles));
 
     for _ in 0..NUM_THREADS {
-        let int_clone = integrator.clone();
+        let mut int_clone = integrator.clone();
         let pixels_clone = Arc::clone(&pixels_mutex);
         let tiles_clone = Arc::clone(&tiles_arc);
 

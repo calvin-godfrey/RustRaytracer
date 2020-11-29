@@ -1,7 +1,6 @@
 #![allow(unused_variables, dead_code)]
 use nalgebra::geometry::Point2;
 use rand::prelude::*;
-use rand::rngs;
 use crate::consts::*;
 
 fn multiply_generator(c: &[u32], mut a: u32) -> u32 {
@@ -364,7 +363,7 @@ impl GlobalSampler {
 
 pub enum Samplers {
     StratifiedSampler {x_samples: i64, y_samples: i64, jitter_samples: bool, pixel: PixelSampler },
-    ZeroTwoSequenceSampler { pixel: PixelSampler }
+    ZeroTwoSequenceSampler { pixel: PixelSampler },
 }
 
 impl Clone for Samplers {
@@ -477,6 +476,18 @@ impl Samplers {
             Samplers::StratifiedSampler {pixel, .. } => {pixel.get_2d()}
             Samplers::ZeroTwoSequenceSampler { pixel } => {pixel.get_2d()}
         }
+    }
+
+    /**
+    Returns pFilm, time, pLens
+    */
+    pub fn get_camera_sample(sampler: &mut Samplers, pixel: &Point2<i32>) -> (Point2<f64>, f64, Point2<f64>) {
+        let pixels_f = Point2::new(pixel.x as f64, pixel.y as f64);
+        let offset = sampler.get_2d();
+        let p_film = Point2::new(pixels_f.x + offset.x, pixels_f.y + offset.y);
+        let time = sampler.get_1d();
+        let lens = sampler.get_2d();
+        (p_film, time, lens)
     }
 
     pub fn sample_dimension(&self, index: i64, dim: i32) -> f64 {

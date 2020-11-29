@@ -1,6 +1,7 @@
 #![allow(dead_code, unused_variables)] // TODO: Remove this
 use nalgebra::base::{Unit, Vector3};
 use nalgebra::geometry::{Projective3, Point3, Point2};
+use util::cosine_hemisphere_pdf;
 use crate::hittable::{Visibility, HitRecord};
 use crate::geometry::{ONB, Ray, get_objects};
 use crate::consts::*;
@@ -156,7 +157,34 @@ impl Light {
                 let pdf_dir = 1f64;
                 (pdf_pos, pdf_dir, ray, n_light, *color)
             }
-            Light::Diffuse { .. } => {todo!("Diffuse light sample_le")}
+            Light::Diffuse { color, prim_index, two_sided, .. } => {
+                let objects: &Vec<Primitive> = &get_objects().objs;
+                let (new_record, pdf_pos) = objects[*prim_index].sample_area(u1);
+                let normal = new_record.n.into_inner();
+                let mut w: Vector3<f64>;
+                let pdf_dir: f64;
+                if *two_sided {
+                    let u = u2;
+                    let mut u0 = u[0];
+                    if u0 < 0.5 {
+                        u0 = (u0 * 2f64).min(ONE_MINUS_EPSILON);
+                        w = util::cosine_sample_hemisphere(&Point2::new(u0, u[1]));
+                    } else {
+                        u0 = ((u0 - 0.5) * 2f64).min(ONE_MINUS_EPSILON);
+                        w = util::cosine_sample_hemisphere(&Point2::new(u0, u[1]));
+                        w.z = w.z * -1f64;
+                    }
+                    pdf_dir = 0.5 * util::cosine_hemisphere_pdf(w.z.abs());
+                } else {
+                    w = util::cosine_sample_hemisphere(u2);
+                    pdf_dir = util::cosine_hemisphere_pdf(w.z);
+                }
+
+                let (v1, v2) = util::make_coordinate_system(&normal);
+                w = w.x * v1 + w.y * v2 + w.z * normal;
+                let ray = new_record.spawn_ray(&w);
+                (pdf_pos, pdf_dir, ray, normal, *color)
+            }
         }
     }
 
@@ -174,7 +202,16 @@ impl Light {
             Light::Distant { world_radius, .. } => {
                 (1f64 / (PI * *world_radius * *world_radius), 0f64)
             }
-            Light::Diffuse { prim_index, two_sided, .. } => { todo!("diffuse pdf_le") }
+            Light::Diffuse { prim_index, two_sided, .. } => {
+                let objects: &Vec<Primitive> = &get_objects().objs;
+                let pdf_pos = objects[*prim_index].const_pdf();
+                let pdf_dir = if *two_sided {
+                    0.5 * cosine_hemisphere_pdf(normal.dot(&ray.dir).abs())
+                } else {
+                    cosine_hemisphere_pdf(normal.dot(&ray.dir))
+                };
+                (pdf_pos, pdf_dir)
+            }
         }
     }
 
@@ -221,8 +258,9 @@ impl Light {
     /**
     Remember to call set_prim_index
     */
-    pub fn make_diffuse_light(prim: &Primitive, to_world: Projective3<f64>, color: Vector3<f64>, n_samples: u32, two_sided: bool) -> Self {
+    pub fn make_diffuse_light(prim_index: usize, to_world: Projective3<f64>, color: Vector3<f64>, n_samples: u32, two_sided: bool) -> Self {
+        let prim = &get_objects().objs[prim_index];
         let flags = AREA;
-        Light::Diffuse { flags, to_world, to_obj: to_world.inverse(), n_samples, two_sided, color, prim_index: 0, area: prim.area() }
+        Light::Diffuse { flags, to_world, to_obj: to_world.inverse(), n_samples, two_sided, color, prim_index, area: prim.area() }
     }
 }

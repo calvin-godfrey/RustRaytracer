@@ -6,18 +6,19 @@ use bumpalo::Bump;
 use crate::hittable::{Mesh, BvhNode};
 use crate::consts::*;
 use crate::util;
+use crate::light::Light;
 use crate::material::materials::{Material, Texture};
 use crate::primitive::Primitive;
 
 pub struct Objects {
     pub meshes: Vec<Mesh>,
     pub objs: Vec<Primitive>,
-    pub lights: Vec<usize>, // TODO: Change this?
+    pub lights: Vec<Light>,
     pub materials: Vec<Material>,
     pub textures: Vec<Texture>,
     pub node: BvhNode,
 }
-static mut OBJECTS: Objects = Objects { meshes: vec![], objs: vec![], lights: vec![], materials: vec![], textures: vec![], node: BvhNode::Empty };
+static mut OBJECTS: Objects = Objects { meshes: Vec::new(), objs: Vec::new(), lights: Vec::new(), materials: Vec::new(), textures: Vec::new(), node: BvhNode::Empty };
 
 pub fn get_objects() -> &'static Objects {
     unsafe {

@@ -3,13 +3,13 @@
 pub const GAMMA: f64 = 1.8;
 pub const IMAGE_WIDTH: u32 = 480;
 pub const ASPECT_RATIO: f64 = 9.0 / 9.0;
-pub const SAMPLES_PER_PIXEL: u32 = 2000;
+pub const SAMPLES_PER_PIXEL: u32 = 20;
 pub const MAX_DEPTH: u32 = 50;
-pub const NUM_THREADS: u32 = 8;
+pub const NUM_THREADS: u32 = 7;
 pub const AMBIENT_LIGHT: bool = false;
 pub const TILE_WIDTH: u32 = 16;
 pub const TILE_HEIGHT: u32 = 16;
-pub const UPDATE_PICTURE_FREQUENCY: u64 = 5;
+pub const UPDATE_PICTURE_FREQUENCY: u64 = 1;
 // BxDF type constants
 pub const BSDF_REFLECTION: u8 = 1 << 0;
 pub const BSDF_TRANSMISSION: u8 = 1 << 1;
