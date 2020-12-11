@@ -3,7 +3,7 @@ use nalgebra::geometry::{Projective3, Point3, Point2};
 use std::sync::Arc;
 use bumpalo::Bump;
 
-use crate::hittable::{Mesh, BvhNode};
+use crate::hittable::{Mesh, BvhNode, HitRecord};
 use crate::consts::*;
 use crate::util;
 use crate::light::Light;
@@ -17,8 +17,9 @@ pub struct Objects {
     pub materials: Vec<Material>,
     pub textures: Vec<Texture>,
     pub node: BvhNode,
+    pub max_bvh: i32
 }
-static mut OBJECTS: Objects = Objects { meshes: Vec::new(), objs: Vec::new(), lights: Vec::new(), materials: Vec::new(), textures: Vec::new(), node: BvhNode::Empty };
+static mut OBJECTS: Objects = Objects { meshes: Vec::new(), objs: Vec::new(), lights: Vec::new(), materials: Vec::new(), textures: Vec::new(), node: BvhNode::Empty, max_bvh: std::i32::MAX };
 
 pub fn get_objects() -> &'static Objects {
     unsafe {
@@ -140,11 +141,15 @@ impl Ray {
     }
 }
 
+pub fn get_intersection(ray: &Ray) -> Option<HitRecord> {
+    get_objects().node.intersects(ray, SMALL, INFINITY, 0)
+}
+
 pub fn cast_ray(ray: &Ray, depth: u32) -> Vector3<f64> {
     if depth <= 0 {
         return Vector3::new(0.0, 0.0, 0.0);
     }
-    let hit_record = get_objects().node.intersects(ray, SMALL, INFINITY);
+    let hit_record = get_intersection(ray);
     
     match hit_record {
         Some(mut record) => {

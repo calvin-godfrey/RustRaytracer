@@ -21,16 +21,17 @@ fn falloff(light: &Light, w: &Vector3<f64>) -> f64 {
     (delta * delta) * (delta * delta)
 }
 
+// TODO: InfiniteAreaLights
 pub enum Light {
     Point { flags: u8, to_world: Projective3<f64>, to_obj: Projective3<f64>, n_samples: u32, p: Point3<f64>, color: Vector3<f64> },
     Spot { flags: u8, to_world: Projective3<f64>, to_obj: Projective3<f64>, n_samples: u32, p: Point3<f64>, color: Vector3<f64>, cos_width: f64, cos_falloff: f64 },
     Distant { flags: u8, to_world: Projective3<f64>, to_obj: Projective3<f64>, n_samples: u32, color: Vector3<f64>, dir: Vector3<f64>, world_center: Point3<f64>, world_radius: f64 },
-    Diffuse { flags: u8, to_world: Projective3<f64>, to_obj: Projective3<f64>, n_samples: u32, color: Vector3<f64>, prim_index: usize, area: f64, two_sided: bool },
+    Diffuse { flags: u8, to_world: Projective3<f64>, to_obj: Projective3<f64>, n_samples: u32, color: Vector3<f64>, prim_index: usize, area: f64, two_sided: bool, is_mesh: bool },
 }
 
 impl Light {
-    pub fn get_flags(light: &Light) -> u8 {
-        match light {
+    pub fn get_flags(&self) -> u8 {
+        match self {
             Light::Point { flags, .. } => { *flags }
             Light::Spot { flags, .. } => { *flags }
             Light::Distant { flags, .. } => { *flags }
@@ -38,8 +39,8 @@ impl Light {
         }
     }
 
-    pub fn get_inv_transform(light: &Light) -> &Projective3<f64> {
-        match light {
+    pub fn get_inv_transform(&self) -> &Projective3<f64> {
+        match self {
             Light::Point { to_obj, .. } => { to_obj }
             Light::Spot { to_obj, .. } => { to_obj }
             Light::Distant { to_obj, .. } => { to_obj }
@@ -47,23 +48,23 @@ impl Light {
         }
     }
 
-    pub fn get_spot_cos(light: &Light) -> (f64, f64) {
-        match light {
+    pub fn get_spot_cos(&self) -> (f64, f64) {
+        match self {
             Light::Spot { cos_width, cos_falloff, .. } => { (*cos_width, *cos_falloff) }
             _ => { (-1f64, -1f64) } // doesn't matter
         }
     }
 
-    pub fn is_delta_light(light: &Light) -> bool {
-        let flags = Light::get_flags(light);
+    pub fn is_delta_light(&self) -> bool {
+        let flags = self.get_flags();
         return (flags & DELTA_POSITION) > 0 || (flags & DELTA_DIRECTION) > 0;
     }
 
     /**
     Returns wi, pdf, color; illumination arriving at point from light
     */
-    pub fn sample_li<'a, 'b, 'c>(light: &'a Light, record: &'b HitRecord, u: &'c Point2<f64>) -> (Unit<Vector3<f64>>, f64, Vector3<f64>, Visibility<'b>) {
-        match light {
+    pub fn sample_li<'a, 'b, 'c>(&'a self, record: &'b HitRecord, u: &'c Point2<f64>) -> (Unit<Vector3<f64>>, f64, Vector3<f64>, Visibility<'b>) {
+        match self {
             Light::Point { p, color, .. } => {
                 let wi = Unit::new_normalize(p - record.p);
                 let pdf = 1.;
@@ -76,7 +77,7 @@ impl Light {
                 let pdf = 1.;
                 let new_record = HitRecord::make_basic(*p, record.t);
                 let vis = Visibility::make_visibility(record, new_record);
-                let color = color.scale(falloff(light, &-wi) / nalgebra::distance_squared(p, &record.p));
+                let color = color.scale(falloff(self, &-wi) / nalgebra::distance_squared(p, &record.p));
                 (wi, pdf, color, vis)
             }
             Light::Distant { color, dir, world_radius, .. } => {
@@ -102,8 +103,8 @@ impl Light {
         }
     }
 
-    pub fn power(light: &Light) -> Vector3<f64> {
-        match light {
+    pub fn power(&self) -> Vector3<f64> {
+        match self {
             Light::Point {color, .. } => {4. * PI * color }
             Light::Spot { color, cos_width, cos_falloff, .. } => {
                 color * 2f64 * PI * (1f64 - 0.5 * (cos_falloff + cos_width))
@@ -117,8 +118,8 @@ impl Light {
         }
     }
 
-    pub fn pdf_li(light: &Light, record: &HitRecord, wi: &Vector3<f64>, prims: &[Primitive]) -> f64 {
-        match light {
+    pub fn pdf_li(&self, record: &HitRecord, wi: &Vector3<f64>, prims: &[Primitive]) -> f64 {
+        match self {
             Light::Point { .. } => { 0. }
             Light::Spot {.. } => { 0. }
             Light::Distant { .. } => { 0. }
@@ -130,8 +131,8 @@ impl Light {
     Amount of light leaving from light at direction;
     returns (pdf_pos, pdf_dir, ray, normal, color)
     */
-    pub fn sample_le(light: &Light, u1: &Point2<f64>, u2: &Point2<f64>, time: f64) -> (f64, f64, Ray, Vector3<f64>, Vector3<f64>) {
-        match light {
+    pub fn sample_le(&self, u1: &Point2<f64>, u2: &Point2<f64>, time: f64) -> (f64, f64, Ray, Vector3<f64>, Vector3<f64>) {
+        match self {
             Light::Point { p, color, .. } => {
                 let ray = Ray::new_time(*p, util::uniform_sample_sphere(u1), time);
                 let n_light = ray.dir;
@@ -191,8 +192,8 @@ impl Light {
     /**
     Returns (pdf_pos, pdf_dir)
     */
-    pub fn pdf_le(light: &Light, ray: &Ray, normal: &Vector3<f64>) -> (f64, f64) {
-        match light {
+    pub fn pdf_le(&self, ray: &Ray, normal: &Vector3<f64>) -> (f64, f64) {
+        match self {
             Light::Point { .. } => {
                 (0f64, util::uniform_sphere_pdf())
             }
@@ -215,8 +216,8 @@ impl Light {
         }
     }
 
-    pub fn l(light: &Light, record: &HitRecord, w: &Vector3<f64>) -> Vector3<f64> {
-        match light {
+    pub fn l(&self, record: &HitRecord, w: &Vector3<f64>) -> Vector3<f64> {
+        match self {
             Light::Diffuse { two_sided, color, .. } => {
                 if record.n.dot(w) > 0f64 || *two_sided {
                     *color
@@ -226,6 +227,11 @@ impl Light {
             }
             _ => { util::black() }
         }
+    }
+
+    // only nonzero for InfiniteAreaLights
+    pub fn le(&self, ray: &Ray) -> Vector3<f64> {
+        util::black()
     }
 
     pub fn set_prim_index(&mut self, index: usize) {
@@ -258,9 +264,9 @@ impl Light {
     /**
     Remember to call set_prim_index
     */
-    pub fn make_diffuse_light(prim_index: usize, to_world: Projective3<f64>, color: Vector3<f64>, n_samples: u32, two_sided: bool) -> Self {
+    pub fn make_diffuse_light(prim_index: usize, to_world: Projective3<f64>, color: Vector3<f64>, n_samples: u32, two_sided: bool, is_mesh: bool) -> Self {
         let prim = &get_objects().objs[prim_index];
         let flags = AREA;
-        Light::Diffuse { flags, to_world, to_obj: to_world.inverse(), n_samples, two_sided, color, prim_index, area: prim.area() }
+        Light::Diffuse { flags, to_world, to_obj: to_world.inverse(), n_samples, two_sided, color, prim_index, area: prim.area(), is_mesh }
     }
 }

@@ -6,6 +6,7 @@ use crate::consts::*;
 use crate::material::materials::{Material, Texture};
 use crate::sampler::Samplers;
 use crate::util;
+use crate::light::Light;
 use crate::geometry;
 use crate::Integrator;
 use crate::primitive::Primitive;
@@ -97,7 +98,7 @@ pub fn cornell_box() -> (String, Integrator) {
     objects.textures.push(Texture::new_solid_color(Vector3::new(0.65, 0.05, 0.05))); // red
     objects.textures.push(Texture::new_solid_color(Vector3::new(0.73, 0.73, 0.73))); // white
     objects.textures.push(Texture::new_solid_color(Vector3::new(0.12, 0.45, 0.15))); // green
-    objects.textures.push(Texture::new_solid_color(Vector3::new(28.0, 28.0, 28.0))); // that one
+    objects.textures.push(Texture::new_solid_color(Vector3::new(28.0, 28.0, 28.0))); // light
     
     objects.materials.push(Material::make_matte(0, 0., 0));
     objects.materials.push(Material::make_matte(1, 0., 0));
@@ -132,81 +133,58 @@ pub fn cornell_box() -> (String, Integrator) {
     let mut indices: Vec<usize> = (0usize..len).collect();    
     let node = BvhNode::new(&objects.objs, &mut indices, 0, len, 0., 1.);
     objects.node = node;
-    ("cornell_box.png".to_string(), Integrator::BasicSampler{ camera })
+    ("cornell_box.png".to_string(), Integrator::make_random_integrator(camera))
 }
 
-// #[allow(dead_code)]
-// pub fn with_everything() -> (geometry::Camera, String) {
-//     let from = Point3::new(478., 278., -600.);
-//     let to = Point3::new(278., 278., 0.);
-//     let up = Vector3::new(0., 1., 0.);
+#[allow(dead_code)]
+pub fn cornell_box_statue(i: i32) -> (String, Integrator) {
 
-//     let camera = geometry::Camera::new_motion_blur(from, to, up, ASPECT_RATIO, 40., 0., 10., 0., 1.);
-//     let objects = geometry::get_objects_mut();
-//     let textures = &mut objects.textures;
-//     let materials = &mut objects.materials;
-//     let objs = &mut objects.objs;
-//     textures.push(Texture::new_solid_color(Vector3::new(122.4, 211.7, 135.3).scale(1./256.))); // ground
-//     materials.push(Material::make_matte(0, 0., 0));
-//     let boxes_per_side = 20;
-//     for i in 0..boxes_per_side {
-//         for j in 0..boxes_per_side {
-//             let w = 100.;
-//             let x0 = -1000.0 + i as f64 * w;
-//             let z0 = -1000.0 + j as f64 * w;
-//             let y0 = 0.0;
-//             let x1 = x0 + w;
-//             let z1 = z0 + w;
-//             let y1 = util::rand_range(1., 91.);
-//             let cube = Cube::new(Vector3::new(x0, y0, z0), Vector3::new(x1, y1, z1), 0);
-//             objs.extend(cube.get_sides());
-//         }
-//     }
+    let from = Point3::new(278., 278., -800.);
+    let to = Point3::new(278., 278., 0.);
+    let up = Vector3::new(0., 1., 0.);
 
-//     textures.push(Texture::new_solid_color(Vector3::new(7., 7., 7.))); // light
-//     materials.push(Material::make_light(textures.len() - 1));
-//     objs.push(Primitive::new_xz_rect(123., 147., 423., 412., 554., materials.len() - 1));
-//     objects.lights.push(objs.len() - 1);
+    let camera = geometry::Camera::new_motion_blur(from, to, up, ASPECT_RATIO, 40., 0., 10., 0., 1.);
 
-//     // textures.push(Texture::new_solid_color(Vector3::new(178.5, 76.5, 25.5).scale(1./256.))); // moving sphere
-//     // materials.push(Material::make_matte(0, 0., 0));
-//     // objs.push(Primitive::new_moving_sphere(Point3::new(400., 400., 200.), Point3::new(430., 400., 200.),0., 1., 50., materials.len() - 1));
-
-//     textures.push(Texture::new_solid_color(util::white()));
-//     materials.push(Material::make_glass(textures.len() - 1, textures.len() - 1, 0., 0., 1.5, 0, true));
-//     objs.push(Primitive::new_sphere(Point3::new(260., 150., 45.), 50., materials.len() - 1)); // dielectric
-
-//     // metal
-//     textures.push(Texture::new_solid_color(util::white() - Vector3::new(204./256., 204./256., 229.3/256.)));
-//     textures.push(Texture::new_solid_color(util::black()));
-//     textures.push(Texture::new_solid_color(Vector3::new(0.1, 0., 0.)));
-//     materials.push(Material::make_metal(textures.len() - 3, textures.len() - 2, textures.len() - 1, textures.len() - 1, textures.len() - 1, 0, true));
-//     objs.push(Primitive::new_sphere(Point3::new(0., 150., 145.), 50., materials.len() - 1));
+    let objects = geometry::get_objects_mut();
+    objects.max_bvh = i;
+    objects.textures.push(Texture::new_solid_color(Vector3::new(0.65, 0.05, 0.05))); // red
+    objects.textures.push(Texture::new_solid_color(Vector3::new(0.73, 0.73, 0.73))); // white
+    objects.textures.push(Texture::new_solid_color(Vector3::new(0.12, 0.45, 0.15))); // green
     
-//     textures.push(Texture::new_texture("data/earthmap.jpg")); // textured sphere
-//     materials.push(Material::make_matte(textures.len() - 1, 0., 0));
-//     objs.push(Primitive::new_sphere(Point3::new(400., 200., 400.), 100., materials.len() - 1));
+    objects.materials.push(Material::make_matte(1, 0., 0));
+    objects.materials.push(Material::make_matte(0, 0., 0));
+    objects.materials.push(Material::make_matte(2, 0., 0));
 
-//     textures.push(Texture::new_solid_color(Vector3::new(186.2, 186.2, 186.2).scale(1./256.)));
-//     materials.push(Material::make_matte(textures.len() - 1, 0., 0));
-//     let rotate = Rotation3::from_euler_angles(60. * PI / 180., 34. * PI / 180., 0.);
-//     let translate = Projective3::from_matrix_unchecked(Matrix4::identity().append_translation(&Vector3::new(-17., 353., 478.)));
-//     let transform: Projective3<f64> = translate * rotate;
-//     for _ in 0..1000 {
-//         let x = util::rand_range(-83., 83.);
-//         let y = util::rand_range(-83., 83.);
-//         let z = util::rand_range(-83., 83.);
-//         let center = Point3::new(x, y, z);
-//         let new_center = transform.transform_point(&center);
-//         objs.push(Primitive::new_sphere(new_center, 10., materials.len() - 1));
-//     }
+    
+    objects.objs.push(Primitive::new_flip_face(Box::new(Primitive::new_yz_rect(0., 0., 555., 555., 555., 2))));
+    objects.objs.push(Primitive::new_yz_rect(0., 0., 555., 555., 0., 1));
+    objects.objs.push(Primitive::new_flip_face(Box::new(Primitive::new_xz_rect(213., 227., 343., 332., 554.9, 0))));
+    objects.objs.push(Primitive::new_xz_rect(0., 0., 555., 555., 0., 0));
+    objects.objs.push(Primitive::new_flip_face(Box::new(Primitive::new_xz_rect(0., 0., 555., 555., 555., 0))));
+    objects.objs.push(Primitive::new_flip_face(Box::new(Primitive::new_xy_rect(0., 0., 555., 555., 555., 0))));
+    
+    objects.lights.push(Light::make_diffuse_light(2, Projective3::identity(), util::white().scale(10f64), 100, false, false));
+    let translate = Projective3::from_matrix_unchecked(Matrix4::identity().append_translation(&Vector3::new(375., 375., 230.)));
+    // let translate = Projective3::from_matrix_unchecked(Matrix4::identity().append_translation(&Vector3::new(470., 690., 230.)));
+    let r1 = Rotation3::from_euler_angles(0., 0., PI);
+    let scale = Similarity3::from_scaling(0.75);
+    // let scale = Similarity3::from_scaling(1.5);
+    let transform = translate * r1 * scale;
 
-//     let len = objs.len();
-//     let mut indices: Vec<usize> = (0usize..len).collect();
-//     let node =  BvhNode::new(&objs, &mut indices, 0, len, 0., 1.);
-//     objects.node = node;
-//     (camera, "old_everything.png".to_string())
-// }
+    let mesh = Mesh::new("data/statue.obj", transform, 1);
+    objects.meshes.push(mesh);
+    let triangles = Mesh::generate_triangles(&objects.meshes, 0, 0);
+    objects.objs.extend(triangles);
+    
+    let len = objects.objs.len();
+    let mut indices: Vec<usize> = (0usize..len).collect();    
+    let node = BvhNode::new(&objects.objs, &mut indices, 0, len, 0., 1.);
+    objects.node = node;
+    let path = format!("cornell_statue{}.png", i);
+    let sampler = Samplers::new_zero_two_sequence_sampler(SAMPLES_PER_PIXEL.into(), 0);
+    let integrator = Integrator::make_whitted_integrator(camera, sampler, MAX_DEPTH); // TODO: samples
+    (path, integrator)
+}
 
 // #[allow(dead_code)]
 // pub fn dragon(i: i32) -> (geometry::Camera, String) {

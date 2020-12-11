@@ -57,6 +57,10 @@ impl Bsdf {
                         self.ss.z * v.x + self.ts.z * v.y + self.ns.z * v.z)
     }
 
+    pub fn f_default(&self, wow: &Vector3<f64>, wiw: &Vector3<f64>) -> Vector3<f64> {
+        self.f(wow, wiw, BSDF_ALL)
+    }
+
     pub fn f(&self, wow: &Vector3<f64>, wiw: &Vector3<f64>, flags: u8) -> Vector3<f64> {
         let wi = self.world_to_local(wiw);
         let wo = self.world_to_local(wow);

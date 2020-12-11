@@ -11,6 +11,7 @@ pub mod materials {
     use crate::bsdf::Bsdf;
     use crate::bxdf::{Fresnel, Bxdf};
     use crate::geometry::get_objects;
+    use crate::consts::*;
 
     pub enum Material {
         Matte { k_d_id: usize, sigma: f64, bump_id: usize },
@@ -22,7 +23,10 @@ pub mod materials {
     }
     
     impl Material {
-        #[allow(unused_variables)]
+        pub fn compute_scattering_default(record: &mut HitRecord, arena: &Bump) {
+            Material::compute_scattering(record, arena, RADIANCE, false)
+        }
+
         pub fn compute_scattering(record: &mut HitRecord, arena: &Bump, mode: u8, allow_lobes: bool) {
             let mat = &get_objects().materials[record.mat_index];
             // TODO: Use arena?

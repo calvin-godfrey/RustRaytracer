@@ -23,7 +23,7 @@ mod integrator;
 
 fn main() {
     let now = SystemTime::now();
-    let (path, integrator) = cornell_box();
+    let (path, integrator) = cornell_box_statue(25);
     tile_multithread(path, integrator);
     match now.elapsed() {
         Ok(elapsed) => {

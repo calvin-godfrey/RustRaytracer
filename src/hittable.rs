@@ -9,7 +9,6 @@ use crate::primitive::Primitive;
 use crate::consts::*;
 use crate::bsdf::Bsdf;
 use crate::light::Light;
-
 /**
 Represents a potential ray *from* p0 *to* p1
 */
@@ -27,7 +26,7 @@ impl <'a> Visibility<'a> {
         let dir = self.p1.p - self.p0.p;
         let ray = Ray::new_time(self.p0.p, dir, self.p1.t);
         // TODO: Use quicker intersection tests that don't make full record
-        crate::geometry::get_objects().node.intersects(&ray, 0., INFINITY).is_some()
+        crate::geometry::get_objects().node.intersects(&ray, 0., INFINITY, 0).is_some()
     }
 }
 
@@ -342,9 +341,7 @@ pub struct BoundingBox {
 
 impl BoundingBox {
     pub fn new(min: Point3<f64>, max: Point3<f64>) -> Self { Self { min, max } }
-    pub fn intersects(&self, ray: &Ray, tmi: f64, tma: f64) -> bool {
-        let mut tmin = tmi;
-        let mut tmax = tma;
+    pub fn intersects(&self, ray: &Ray, mut tmin: f64, mut tmax: f64) -> bool {
         for a in 0..3 {
             let inv_d = 1. / ray.dir[a];
             let val1 = (self.min[a] - ray.origin[a]) * inv_d;
@@ -358,6 +355,33 @@ impl BoundingBox {
             }
         };
         true
+    }
+
+    pub fn full_intersects(&self, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
+        let xy1 = Primitive::new_xy_rect(self.min.x, self.min.y, self.max.x, self.max.y, self.min.z, 0);
+        let xy2 = Primitive::new_xy_rect(self.min.x, self.min.y, self.max.x, self.max.y, self.max.z, 0);
+        let xz1 = Primitive::new_xz_rect(self.min.x, self.min.z, self.max.x, self.max.z, self.min.y, 0);
+        let xz2 = Primitive::new_xz_rect(self.min.x, self.min.z, self.max.x, self.max.z, self.max.y, 0);
+        let yz1 = Primitive::new_yz_rect(self.min.y, self.min.z, self.max.y, self.max.z, self.min.x, 0);
+        let yz2 = Primitive::new_yz_rect(self.min.y, self.min.z, self.max.y, self.max.z, self.max.x, 0);
+        let sides = vec![xy1, xy2, xz1, xz2, yz1, yz2];
+        let intersects: Vec<HitRecord> = sides.iter()
+                                        .filter_map(|x| Primitive::intersects_obj(x, ray, tmin, tmax))
+                                        .filter(|x| x.t >= tmin && x.t <= tmax).collect();
+        if intersects.len() == 0 {
+            return None;
+        }
+        let mut time = tmax;
+        let mut hit: HitRecord = HitRecord::make_basic(Point3::new(0f64, 0f64, 0f64), 0f64); // random default
+        for intersect in intersects {
+            if intersect.t <= time {
+                if intersect.t >= tmin {
+                    time = intersect.t;
+                    hit = intersect;
+                }
+            }
+        }
+        Some(hit)
     }
 
     pub fn union(bbox1: &Self, bbox2: &Self) -> Self {
@@ -402,14 +426,17 @@ pub enum BvhNode {
 }
 
 impl BvhNode {
-    pub fn intersects(&self, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
+    pub fn intersects(&self, ray: &Ray, tmin: f64, tmax: f64, depth: i32) -> Option<HitRecord> {
         match self {
             BvhNode::Internal { left, right, bounding_box } => {
+                if depth == get_objects().max_bvh {
+                    return bounding_box.full_intersects(ray, tmin, tmax);
+                }
                 if !bounding_box.intersects(ray, tmin, tmax) {
                     return None;
                 }
-                let left_option = left.intersects(ray, tmin, tmax);
-                let right_option = right.intersects(ray, tmin, tmax);
+                let left_option = left.intersects(ray, tmin, tmax, depth + 1);
+                let right_option = right.intersects(ray, tmin, tmax, depth + 1);
 
                 match &left_option {
                     Some(l) => {
@@ -427,6 +454,9 @@ impl BvhNode {
                 }
             }
             BvhNode::Leaf { index, bounding_box } => {
+                if depth == get_objects().max_bvh {
+                    return bounding_box.full_intersects(ray, tmin, tmax);
+                }
                 if !bounding_box.intersects(ray, tmin, tmax) {
                     return None;
                 }
