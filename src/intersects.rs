@@ -4,7 +4,6 @@ use std::sync::Arc;
 use crate::geometry::Ray;
 use crate::hittable::HitRecord;
 use crate::util;
-use crate::primitive::moving_sphere_center;
 use crate::consts::*;
 
 #[allow(unused_variables)]

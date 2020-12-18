@@ -133,6 +133,17 @@ impl Primitive {
         Primitive::FlipFace { obj }
     }
 
+    pub fn get_mat_index(&self) -> usize {
+        match self {
+            Primitive::Sphere { mat_index, .. } => { *mat_index }
+            Primitive::Triangle { mat_index, .. } => { *mat_index }
+            Primitive::XYRect { mat_index, .. } => { *mat_index }
+            Primitive::XZRect { mat_index, .. } => { *mat_index }
+            Primitive::YZRect { mat_index, .. } => { *mat_index }
+            Primitive::FlipFace { obj } => {obj.as_ref().get_mat_index()}
+        }
+    }
+
     #[allow(unused_variables)]
     pub fn intersects(index: usize, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
         let all_objects = get_objects();
@@ -156,6 +167,17 @@ impl Primitive {
             }
         };
         record.map(|mut r| { r.prim_index = index; r })
+    }
+
+    pub fn set_light_index(&mut self, index: usize) {
+        match self {
+            Primitive::Sphere { light_index, .. } => { *light_index = index; }
+            Primitive::Triangle { light_index, .. } => { *light_index = index; }
+            Primitive::XYRect { light_index, .. } => { *light_index = index; }
+            Primitive::XZRect { light_index, .. } => { *light_index = index; }
+            Primitive::YZRect { light_index, .. } => { *light_index = index; }
+            Primitive::FlipFace { obj } => {obj.as_mut().set_light_index(index)}
+        }
     }
 
     pub fn area(&self) -> f64 {
@@ -299,9 +321,4 @@ impl Primitive {
              }
         }
     }
-}
-
-pub fn moving_sphere_center(c0: &Point3<f64>, c1: &Point3<f64>, t0: f64, t1: f64, time: f64) -> Point3<f64> {
-    let diff: Vector3<f64> = c1 - c0;
-    c0 + (time - t0) / (t1 - t0) * diff
 }

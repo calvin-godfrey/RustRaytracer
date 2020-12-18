@@ -231,6 +231,9 @@ pub fn thread_safe_draw_picture(img: &Mutex<image::RgbImage>, pixels: &Mutex<Vec
     }
 }
 
+/**
+* Refract vec over `n` with given IoR
+*/
 pub fn refract(vec: &Vector3<f64>, n: &Unit<Vector3<f64>>, eta: f64) -> Option<Vector3<f64>> {
     // let cost = -vec.dot(n);
     // let out_para = (vec.as_ref() + n.as_ref().scale(cost)).scale(eta);

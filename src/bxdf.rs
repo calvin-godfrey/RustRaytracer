@@ -128,8 +128,8 @@ pub enum Bxdf {
 
 #[allow(unused_variables)]
 impl Bxdf {
-    pub fn matches_flag(bxdf: &Bxdf, flag: u8) -> bool {
-        match bxdf {
+    pub fn matches_flag(&self, flag: u8) -> bool {
+        match &self {
             Bxdf::ScaledBxdf { inner, .. } => { Bxdf::matches_flag(inner.as_ref(), flag) }
             Bxdf::SpecularReflection { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
             Bxdf::SpecularTransmission { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
@@ -416,8 +416,8 @@ impl Bxdf {
         }
     }
 
-    pub fn pdf(bxdf: &Bxdf, wo: &Vector3<f64>, wi: &Vector3<f64>) -> f64 {
-        match bxdf {
+    pub fn pdf(&self, wo: &Vector3<f64>, wi: &Vector3<f64>) -> f64 {
+        match self {
             Bxdf::ScaledBxdf { inner, scale } => { Bxdf::pdf(inner.as_ref(), wo, wi) }
             Bxdf::SpecularReflection { color, fresnel, bxdf_type } => { Bxdf::default_pdf(wo, wi) }
             Bxdf::SpecularTransmission { color, eta_a, eta_b, fresnel, mode, bxdf_type } => {
@@ -480,31 +480,31 @@ impl Bxdf {
         }
     }
 
-    pub fn get_type(bxdf: &Bxdf) -> u8 {
-        match bxdf {
-            Bxdf::ScaledBxdf { inner, scale } => { Bxdf::get_type(inner.as_ref()) }
-            Bxdf::SpecularReflection { color, fresnel, bxdf_type } => { *bxdf_type }
-            Bxdf::SpecularTransmission { color, eta_a, eta_b, fresnel, mode, bxdf_type } => {*bxdf_type}
-            Bxdf::LambertianReflection { color, bxdf_type } => {*bxdf_type}
-            Bxdf::OrenNayer { color, a, b, bxdf_type } => {*bxdf_type}
-            Bxdf::MicrofacetReflection { color, fresnel, mfd, bxdf_type } => {*bxdf_type}
-            Bxdf::MicrofacetTransmission { color, fresnel, mfd, eta_a, eta_b, mode, bxdf_type } => {*bxdf_type}
-            Bxdf::FresnelBlend { r_s, r_d, mfd, bxdf_type } => {*bxdf_type}
-            Bxdf::FresnelSpecular { r, t, eta_a, eta_b, mode, bxdf_type } => {*bxdf_type}
+    pub fn get_type(&self) -> u8 {
+        match self {
+            Bxdf::ScaledBxdf { inner, .. } => { Bxdf::get_type(inner.as_ref()) }
+            Bxdf::SpecularReflection { bxdf_type, .. } => { *bxdf_type }
+            Bxdf::SpecularTransmission { bxdf_type, .. } => {*bxdf_type}
+            Bxdf::LambertianReflection { bxdf_type, .. } => {*bxdf_type}
+            Bxdf::OrenNayer { bxdf_type, .. } => {*bxdf_type}
+            Bxdf::MicrofacetReflection { bxdf_type, .. } => {*bxdf_type}
+            Bxdf::MicrofacetTransmission { bxdf_type, .. } => {*bxdf_type}
+            Bxdf::FresnelBlend { bxdf_type, .. } => {*bxdf_type}
+            Bxdf::FresnelSpecular { bxdf_type, .. } => {*bxdf_type}
         }
     }
 
-    pub fn get_name(bxdf: &Bxdf) -> &str {
-        match bxdf {
-            Bxdf::ScaledBxdf { inner, scale } => { "Scaled" }
-            Bxdf::SpecularReflection { color, fresnel, bxdf_type } => { "Specular Reflection" }
-            Bxdf::SpecularTransmission { color, eta_a, eta_b, fresnel, mode, bxdf_type } => {"Specular Transmission"}
-            Bxdf::LambertianReflection { color, bxdf_type } => {"Lambertian Reflection"}
-            Bxdf::OrenNayer { color, a, b, bxdf_type } => {"Oren Nayer"}
-            Bxdf::MicrofacetReflection { color, fresnel, mfd, bxdf_type } => {"Microfacet Refl"}
-            Bxdf::MicrofacetTransmission { color, fresnel, mfd, eta_a, eta_b, mode, bxdf_type } => {"Microfacet Transmission"}
-            Bxdf::FresnelBlend { r_s, r_d, mfd, bxdf_type } => {"Fresnel Blend"}
-            Bxdf::FresnelSpecular { r, t, eta_a, eta_b, mode, bxdf_type } => {"Fresnel Specular"}
+    pub fn get_name(&self) -> &str {
+        match self {
+            Bxdf::ScaledBxdf { .. } => { "Scaled" }
+            Bxdf::SpecularReflection { .. } => { "Specular Reflection" }
+            Bxdf::SpecularTransmission { .. } => {"Specular Transmission"}
+            Bxdf::LambertianReflection { .. } => {"Lambertian Reflection"}
+            Bxdf::OrenNayer { .. } => {"Oren Nayer"}
+            Bxdf::MicrofacetReflection { .. } => {"Microfacet Refl"}
+            Bxdf::MicrofacetTransmission { .. } => {"Microfacet Transmission"}
+            Bxdf::FresnelBlend { .. } => {"Fresnel Blend"}
+            Bxdf::FresnelSpecular { .. } => {"Fresnel Specular"}
         }
     }
 

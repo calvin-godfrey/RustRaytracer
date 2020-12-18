@@ -380,8 +380,8 @@ impl Clone for Samplers {
 
 
 impl Samplers {
-    fn round_count(sampler: &Samplers, n: u32) -> u32 {
-        match sampler {
+    pub fn round_count(&self, n: u32) -> u32 {
+        match self {
             Samplers::StratifiedSampler { .. } => {  }
             Samplers::ZeroTwoSequenceSampler { pixel } => { return n.next_power_of_two(); }
         }
@@ -483,12 +483,12 @@ impl Samplers {
     /**
     Returns pFilm, time, pLens
     */
-    pub fn get_camera_sample(sampler: &mut Samplers, pixel: &Point2<i32>) -> (Point2<f64>, f64, Point2<f64>) {
+    pub fn get_camera_sample(&mut self, pixel: &Point2<i32>) -> (Point2<f64>, f64, Point2<f64>) {
         let pixels_f = Point2::new(pixel.x as f64, pixel.y as f64);
-        let offset = sampler.get_2d();
+        let offset = self.get_2d();
         let p_film = Point2::new(pixels_f.x + offset.x, pixels_f.y + offset.y);
-        let time = sampler.get_1d();
-        let lens = sampler.get_2d();
+        let time = self.get_1d();
+        let lens = self.get_2d();
         (p_film, time, lens)
     }
 

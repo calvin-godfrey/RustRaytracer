@@ -1,5 +1,6 @@
 use nalgebra::base::{Unit, Vector3, Vector2};
 use nalgebra::geometry::{Projective3, Point3};
+
 use std::cmp::Ordering;
 use std::sync::Arc;
 use crate::geometry::{Ray, get_objects};
@@ -8,7 +9,6 @@ use crate::util;
 use crate::primitive::Primitive;
 use crate::consts::*;
 use crate::bsdf::Bsdf;
-use crate::light::Light;
 /**
 Represents a potential ray *from* p0 *to* p1
 */
@@ -24,9 +24,11 @@ impl <'a> Visibility<'a> {
 
     pub fn unoccluded(&self) -> bool {
         let dir = self.p1.p - self.p0.p;
-        let ray = Ray::new_time(self.p0.p, dir, self.p1.t);
+        let ray = Ray::new_time(self.p0.p + dir * SMALL, dir, self.p1.t);
         // TODO: Use quicker intersection tests that don't make full record
-        crate::geometry::get_objects().node.intersects(&ray, 0., INFINITY, 0).is_some()
+        let new_record = crate::geometry::get_objects().node.intersects(&ray, 0., INFINITY, 0).unwrap();
+        // check that the index matches
+        new_record.prim_index == self.p1.prim_index
     }
 }
 
@@ -118,7 +120,7 @@ impl HitRecord {
         if prim.get_light_index() == std::usize::MAX {
             util::black()
         } else {
-            Light::l(&lights[prim.get_light_index()], self, w)
+            lights[prim.get_light_index()].l(self, w)
         }
     }
 
@@ -465,6 +467,7 @@ impl BvhNode {
             BvhNode::Empty => { return None; }
         }
     }
+
 
     #[allow(unused_variables)]
     pub fn new(objects: &Vec<Primitive>, indices: &mut Vec<usize>, start: usize, end: usize, t0: f64, t1: f64) -> BvhNode {

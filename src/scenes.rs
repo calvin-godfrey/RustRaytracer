@@ -8,7 +8,8 @@ use crate::sampler::Samplers;
 use crate::util;
 use crate::light::Light;
 use crate::geometry;
-use crate::Integrator;
+use crate::geometry::Camera;
+use crate::integrator::{IntType, LightStrategy};
 use crate::primitive::Primitive;
 
 // #[allow(dead_code)]
@@ -86,7 +87,7 @@ use crate::primitive::Primitive;
 // }
 
 #[allow(dead_code)]
-pub fn cornell_box() -> (String, Integrator) {
+pub fn cornell_box() -> (String, Camera, Samplers, IntType) {
 
     let from = Point3::new(278., 278., -800.);
     let to = Point3::new(278., 278., 0.);
@@ -133,11 +134,12 @@ pub fn cornell_box() -> (String, Integrator) {
     let mut indices: Vec<usize> = (0usize..len).collect();    
     let node = BvhNode::new(&objects.objs, &mut indices, 0, len, 0., 1.);
     objects.node = node;
-    ("cornell_box.png".to_string(), Integrator::make_random_integrator(camera))
+    let sampler = Samplers::new_zero_two_sequence_sampler(SAMPLES_PER_PIXEL.into(), 0);
+    ("cornell_box.png".to_string(), camera, sampler, IntType::Whitted { max_depth: MAX_DEPTH })
 }
 
 #[allow(dead_code)]
-pub fn cornell_box_statue(i: i32) -> (String, Integrator) {
+pub fn cornell_box_statue() -> (String, Camera, Samplers, IntType) {
 
     let from = Point3::new(278., 278., -800.);
     let to = Point3::new(278., 278., 0.);
@@ -146,7 +148,6 @@ pub fn cornell_box_statue(i: i32) -> (String, Integrator) {
     let camera = geometry::Camera::new_motion_blur(from, to, up, ASPECT_RATIO, 40., 0., 10., 0., 1.);
 
     let objects = geometry::get_objects_mut();
-    objects.max_bvh = i;
     objects.textures.push(Texture::new_solid_color(Vector3::new(0.65, 0.05, 0.05))); // red
     objects.textures.push(Texture::new_solid_color(Vector3::new(0.73, 0.73, 0.73))); // white
     objects.textures.push(Texture::new_solid_color(Vector3::new(0.12, 0.45, 0.15))); // green
@@ -158,7 +159,9 @@ pub fn cornell_box_statue(i: i32) -> (String, Integrator) {
     
     objects.objs.push(Primitive::new_flip_face(Box::new(Primitive::new_yz_rect(0., 0., 555., 555., 555., 2))));
     objects.objs.push(Primitive::new_yz_rect(0., 0., 555., 555., 0., 1));
-    objects.objs.push(Primitive::new_flip_face(Box::new(Primitive::new_xz_rect(213., 227., 343., 332., 554.9, 0))));
+    let mut light_obj = Primitive::new_xz_rect(213., 227., 343., 332., 554.9, 0);
+    light_obj.set_light_index(0);
+    objects.objs.push(Primitive::new_flip_face(Box::new(light_obj)));
     objects.objs.push(Primitive::new_xz_rect(0., 0., 555., 555., 0., 0));
     objects.objs.push(Primitive::new_flip_face(Box::new(Primitive::new_xz_rect(0., 0., 555., 555., 555., 0))));
     objects.objs.push(Primitive::new_flip_face(Box::new(Primitive::new_xy_rect(0., 0., 555., 555., 555., 0))));
@@ -180,10 +183,10 @@ pub fn cornell_box_statue(i: i32) -> (String, Integrator) {
     let mut indices: Vec<usize> = (0usize..len).collect();    
     let node = BvhNode::new(&objects.objs, &mut indices, 0, len, 0., 1.);
     objects.node = node;
-    let path = format!("cornell_statue{}.png", i);
+    let path = format!("cornell_statue.png");
     let sampler = Samplers::new_zero_two_sequence_sampler(SAMPLES_PER_PIXEL.into(), 0);
-    let integrator = Integrator::make_whitted_integrator(camera, sampler, MAX_DEPTH); // TODO: samples
-    (path, integrator)
+    let integrator = IntType::Direct { max_depth: MAX_DEPTH, strategy: LightStrategy::UniformOne }; // TODO: samples
+    (path, camera, sampler, integrator)
 }
 
 // #[allow(dead_code)]
@@ -423,22 +426,22 @@ pub fn cornell_box_statue(i: i32) -> (String, Integrator) {
 // }
 
 // #[allow(dead_code)]
-// pub fn two_dragons() -> (geometry::Camera, BvhNode, Vec<Mesh>, Vec<Primitive>, Vec<usize>, Vec<Material>, Vec<Texture>, String) {
-//     let mut meshes = vec![];
+// pub fn two_dragons() -> (String, Integrator) {
+//     let objects = geometry::get_objects_mut();
 //     let transform = Similarity3::new(Vector3::new(0., 0., 0.), Vector3::new(0., 0., 0.), 10.);
 //     let other_transform = Similarity3::new(Vector3::new(5., 0., 0.), Vector3::new(0., 0., 0.), 10.);
 //     let mesh = Mesh::new("data/dragon/dragon.obj", Projective3::from_matrix_unchecked(transform.to_homogeneous()), 2);
-//     meshes.push(mesh);
-//     meshes.push(Mesh::new("data/dragon/dragon.obj", Projective3::from_matrix_unchecked(other_transform.to_homogeneous()), 3));
+//     objects.meshes.push(mesh);
+//     objects.meshes.push(Mesh::new("data/dragon/dragon.obj", Projective3::from_matrix_unchecked(other_transform.to_homogeneous()), 3));
 //     let from: Point3<f64> = Point3::new(-8.5, 5., 0.);
 //     let to: Point3<f64> = Point3::new(0., -0.15, -0.08);
 //     let up: Vector3<f64> = Vector3::new(0., 1., 0.);
 
-//     let camera = geometry::Camera::new(from, to, up, ASPECT_RATIO, 70., 0.0, 10.);
+//     let camera = geometry::Camera::new(from, to, up, ASPECT_RATIO, 60., 0.0, 10.);
 
-//     let mut world: Vec<Primitive> = Vec::new();
-//     let mut texts: Vec<Texture> = Vec::new();
-//     let mut mats: Vec<Material> = Vec::new();
+//     let world = &mut objects.objs;
+//     let texts = &mut objects.textures;
+//     let mats = &mut objects.materials;
 
 //     let light_gray = Vector3::new(0.4, 0.15, 0.15).scale(2.);
 //     let dark_gray = Vector3::new(0.15, 0.15, 0.4).scale(2.);
@@ -452,7 +455,10 @@ pub fn cornell_box_statue(i: i32) -> (String, Integrator) {
 //     mats.push(Material::make_matte(2, 0f64, 0));    
 //     world.push(Primitive::new_xz_rect(-10000., -10000., 10000., 10000., -2.83, 0));
 //     mats.push(Material::make_light(3));
-//     world.push(Primitive::new_xz_rect(-10., -10., 10., 10., 50., mats.len() - 1));
+//     let mut light_obj = Primitive::new_xz_rect(-10., -10., 10., 10., 50., mats.len() - 1);
+//     light_obj.set_light_index(0);
+//     world.push(light_obj);
+//     objects.lights.push(Light::make_diffuse_light(1, Projective3::identity(), util::white().scale(2f64), 100, false, false));
 //     texts.push(Texture::new_solid_color(util::white())); // 4
 //     texts.push(Texture::new_solid_color(util::white())); // 5
 //     texts.push(Texture::new_solid_color(eta)); // 6
@@ -461,19 +467,22 @@ pub fn cornell_box_statue(i: i32) -> (String, Integrator) {
 //     mats.push(Material::make_glass(4, 5, 0.0, 0.0, 1.5, 0, true));
 //     mats.push(Material::make_metal(6, 7, 8, 8, 8, 0, true));
 
-//     let triangles = Mesh::generate_triangles(&meshes, 0, 2);
+//     let triangles = Mesh::generate_triangles(&objects.meshes, 0, 2);
 //     for tri in triangles {
 //         world.push(tri);
 //     }
 
-//     let triangles = Mesh::generate_triangles(&meshes, 1, 3);
-//     for tri in triangles {
-//         world.push(tri);
-//     }
+//     // let triangles = Mesh::generate_triangles(&objects.meshes, 1, 3);
+//     // for tri in triangles {
+//     //     world.push(tri);
+//     // }
 
 //     let len = world.len();
 //     let mut indices: Vec<usize> = (0usize..len).collect();
-//     let bvh = BvhNode::new(&world, &mut indices, 0, len, 0., 1.);
-//     (camera, bvh, meshes, world, vec![], mats, texts, "two_dragons.png".to_string())
+//     objects.node = BvhNode::new(&world, &mut indices, 0, len, 0., 1.);
+//     let sampler = Samplers::new_zero_two_sequence_sampler(SAMPLES_PER_PIXEL.into(), 0);
+
+//     let integrator = Integrator::make_whitted_integrator(camera, sampler, MAX_DEPTH);
+//     ("two_dragons.png".to_string(), integrator)
 // }
 

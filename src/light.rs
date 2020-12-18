@@ -21,6 +21,7 @@ fn falloff(light: &Light, w: &Vector3<f64>) -> f64 {
     (delta * delta) * (delta * delta)
 }
 
+#[derive(PartialEq)]
 // TODO: InfiniteAreaLights
 pub enum Light {
     Point { flags: u8, to_world: Projective3<f64>, to_obj: Projective3<f64>, n_samples: u32, p: Point3<f64>, color: Vector3<f64> },
@@ -36,6 +37,15 @@ impl Light {
             Light::Spot { flags, .. } => { *flags }
             Light::Distant { flags, .. } => { *flags }
             Light::Diffuse { flags, .. } => { *flags }
+        }
+    }
+
+    pub fn get_n_samples(&self) -> u32 {
+        match self {
+            Light::Point { n_samples, .. } => { *n_samples }
+            Light::Spot { n_samples, .. } => { *n_samples }
+            Light::Distant { n_samples, .. } => { *n_samples }
+            Light::Diffuse { n_samples, .. } => { *n_samples }
         }
     }
 
@@ -90,7 +100,8 @@ impl Light {
             }
             Light::Diffuse { prim_index, color, area, two_sided, .. } => {
                 let primitive = &get_objects().objs[*prim_index];
-                let (new_record, mut pdf, wi) = primitive.sample(record, u);
+                let (mut new_record, mut pdf, wi) = primitive.sample(record, u);
+                new_record.prim_index = *prim_index;
                 if pdf == 0f64 || (record.p - new_record.p).magnitude_squared() == 0f64 {
                     pdf = 0f64;
                     // return dummy values
@@ -118,7 +129,8 @@ impl Light {
         }
     }
 
-    pub fn pdf_li(&self, record: &HitRecord, wi: &Vector3<f64>, prims: &[Primitive]) -> f64 {
+    pub fn pdf_li(&self, record: &HitRecord, wi: &Vector3<f64>) -> f64 {
+        let prims = &get_objects().objs;
         match self {
             Light::Point { .. } => { 0. }
             Light::Spot {.. } => { 0. }

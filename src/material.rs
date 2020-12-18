@@ -44,7 +44,7 @@ pub mod materials {
                         }
                     }
                 }
-                Material::Light { texture_id } => {}
+                Material::Light { .. } => {}
                 Material::Plastic { k_d_id, k_s_id, bump_id, roughness, remap_roughness } => {
                     let color = Texture::value(*k_d_id, record.uv.x, record.uv.y, &record.p);
                     if color != util::black() {

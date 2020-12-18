@@ -1,7 +1,9 @@
 use image::RgbImage;
-use std::{thread, sync::{Arc, Mutex}, collections::HashSet, time::SystemTime};
+use std::{collections::HashSet, sync::{Arc, Mutex}, thread, time::SystemTime};
 use consts::*;
-use integrator::Integrator;
+use integrator::{IntType, Integrator};
+use crate::geometry::Camera;
+use crate::sampler::Samplers;
 use scenes::*;
 
 mod util;
@@ -20,11 +22,12 @@ mod bsdf;
 mod light;
 mod sampler;
 mod integrator;
+mod distribution;
 
 fn main() {
     let now = SystemTime::now();
-    let (path, integrator) = cornell_box_statue(25);
-    tile_multithread(path, integrator);
+    let (path, camera, sampler, int_type) = cornell_box_statue();
+    tile_multithread(path, camera, sampler, int_type);
     match now.elapsed() {
         Ok(elapsed) => {
             let milliseconds = elapsed.as_millis() % 1000;
@@ -47,7 +50,7 @@ fn main() {
     }
 }
 
-fn tile_multithread(path: String, integrator: Integrator) {
+fn tile_multithread(path: String, camera: Camera, sampler: Samplers, int_type: IntType) {
     let img = RgbImage::new(IMAGE_WIDTH, IMAGE_HEIGHT);
     let pixels: Vec<Vec<(f64, f64, f64, u32)>> = util::make_empty_image(IMAGE_HEIGHT as usize, IMAGE_WIDTH as usize);
     let pixels_mutex: Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>> = Arc::new(Mutex::new(pixels));
@@ -67,11 +70,15 @@ fn tile_multithread(path: String, integrator: Integrator) {
     let tiles_arc: Arc<Mutex<Vec<Vec<i32>>>> = Arc::new(Mutex::new(started_tiles));
 
     for _ in 0..NUM_THREADS {
-        let mut int_clone = integrator.clone();
+        let camera_clone = camera.clone();
+        let sampler_clone = sampler.clone();
+        let int_type_clone = int_type.clone();
         let pixels_clone = Arc::clone(&pixels_mutex);
         let tiles_clone = Arc::clone(&tiles_arc);
 
         thread_vec.push(thread::spawn(move || {
+            let mut img_integrator = integrator::get_integrator(int_type_clone, camera_clone, sampler_clone);
+            img_integrator.init();
             loop {
                 let mut tiles = tiles_clone.lock().unwrap();
                 let mut tx: u32 = 0;
@@ -107,7 +114,8 @@ fn tile_multithread(path: String, integrator: Integrator) {
                             break;
                         }
 
-                        int_clone.render(&mut local_img, px, py);
+
+                        img_integrator.render(&mut local_img, px, py);
                         let finished_pixel = local_img[y as usize][x as usize];
                         util::thread_safe_write_pixel(&pixels_clone, py as usize, px as usize, finished_pixel);
                     }

@@ -68,9 +68,9 @@ impl Bsdf {
         let mut f = util::black();
         for i in 0..self.bxdfs.len() {
             let b = self.bxdfs[i].as_ref();
-            if bxdf::matches_flags(bxdf::Bxdf::get_type(b), flags) &&
-                 ((reflect && (bxdf::Bxdf::get_type(b) & BSDF_REFLECTION) > 0)) ||
-                 (!reflect && (bxdf::Bxdf::get_type(b) & BSDF_TRANSMISSION) > 0) {
+            if bxdf::matches_flags(b.get_type(), flags) &&
+                 ((reflect && (b.get_type() & BSDF_REFLECTION) > 0)) ||
+                 (!reflect && (b.get_type() & BSDF_TRANSMISSION) > 0) {
                     f += bxdf::Bxdf::f(b, &wo, &wi);
             }
         }
@@ -90,7 +90,7 @@ impl Bsdf {
         let mut used_index: usize = std::usize::MAX;
         for index in 0..self.bxdfs.len() {
             bxdf = self.bxdfs[index].as_ref();
-            if bxdf::matches_flags(bxdf::Bxdf::get_type(bxdf), bxdf_type) {
+            if bxdf::matches_flags(bxdf.get_type(), bxdf_type) {
                 if count == 0 {
                     used_index = index;
                     break;
@@ -103,13 +103,13 @@ impl Bsdf {
         if wo.z == 0. {
             (util::black(), util::black(), 0f64, 0u8);
         }
-        let (mut color, wi, mut pdf) = bxdf::Bxdf::sample_f(bxdf, &wo, sample, bxdf_type); // TODO: What is sample type?
+        let (mut color, wi, mut pdf) = bxdf::Bxdf::sample_f(bxdf, &wo, sample, bxdf_type);
         if pdf == 0. {
             (util::black(), util::black(), 0f64, 0u8);
         }
         let wiw = self.local_to_world(&wi);
         
-        if (bxdf::Bxdf::get_type(bxdf) & BSDF_SPECULAR) == 0 && matching > 1 {
+        if (bxdf.get_type() & BSDF_SPECULAR) == 0 && matching > 1 {
             for index in 0..self.bxdfs.len() {
                 let b = self.bxdfs[index].as_ref();
                 if index != used_index && bxdf::matches_flags(bxdf::Bxdf::get_type(b), bxdf_type) {
@@ -135,6 +135,31 @@ impl Bsdf {
         }
         
         (color, wiw, pdf, 0u8)
+    }
+
+    pub fn pdf(&self, wow: &Vector3<f64>, wiw: &Vector3<f64>, flags: u8) -> f64 {
+        let n_components = self.num_components(BSDF_ALL);
+        if n_components == 0 {
+            return 0f64;
+        }
+        let wo = self.world_to_local(&wow);
+        let wi = self.world_to_local(&wiw);
+        if wo.z == 0f64 {
+            return 0f64;
+        }
+        let mut pdf = 0f64;
+        let mut matching: i32 = 0;
+        for i in 0usize..(n_components as usize) {
+            if self.bxdfs[i].matches_flag(flags) {
+                matching += 1;
+                pdf += self.bxdfs[i].pdf(&wo, &wi);
+            }
+        }
+        if matching > 0 {
+            pdf
+        } else {
+            0f64
+        }
     }
     // TODO: Add rho methods
 }
