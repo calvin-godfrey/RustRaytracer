@@ -29,8 +29,8 @@ impl Bsdf {
         Self { eta: EMPTY_ETA, ns: n, ng: n, ss: n, ts: n, bxdfs: vec![]}
     }
 
-    pub fn is_empty(bsdf: &Bsdf) -> bool {
-        bsdf.eta == EMPTY_ETA
+    pub fn is_empty(&self) -> bool {
+        self.eta == EMPTY_ETA
     }
 
     pub fn add(&mut self, bxdf: bxdf::Bxdf) {

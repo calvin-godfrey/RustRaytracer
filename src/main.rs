@@ -1,7 +1,7 @@
 use image::RgbImage;
 use std::{collections::HashSet, sync::{Arc, Mutex}, thread, time::SystemTime};
 use consts::*;
-use integrator::{IntType, Integrator};
+use integrator::IntType;
 use crate::geometry::Camera;
 use crate::sampler::Samplers;
 use scenes::*;
@@ -26,7 +26,7 @@ mod distribution;
 
 fn main() {
     let now = SystemTime::now();
-    let (path, camera, sampler, int_type) = cornell_box_statue();
+    let (path, camera, sampler, int_type) = two_dragons();
     tile_multithread(path, camera, sampler, int_type);
     match now.elapsed() {
         Ok(elapsed) => {

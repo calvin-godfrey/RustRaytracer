@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables)] // TODO: Remove this
-use nalgebra::base::Vector3;
+use nalgebra::{Point3, base::Vector3};
 use nalgebra::geometry::Point2;
 use bumpalo::Bump;
 
@@ -22,7 +22,8 @@ pub enum LightStrategy {
 pub enum IntType {
     Whitted { max_depth: u32 },
     Basic { max_depth: u32 },
-    Direct { max_depth: u32, strategy: LightStrategy }
+    Direct { max_depth: u32, strategy: LightStrategy },
+    Path { max_depth: u32 }
 }
 
 pub trait Integrator {
@@ -33,7 +34,7 @@ pub trait Integrator {
 
 pub trait SamplerIntegrator: Integrator {
     fn preprocess(&mut self);
-    fn li(&mut self, ray: &Ray, depth: u32) -> Vector3<f64>;
+    fn li(&mut self, ray: Ray, depth: u32) -> Vector3<f64>;
 }
 
 pub fn get_integrator<'a>(int_type: IntType, camera: Camera, sampler: Samplers) -> Box<dyn Integrator> {
@@ -46,6 +47,9 @@ pub fn get_integrator<'a>(int_type: IntType, camera: Camera, sampler: Samplers) 
         }
         IntType::Direct { max_depth, strategy } => {
             Box::new(DirectLightingIntegrator::make_direct_lighting(camera, sampler, max_depth, Vec::new(), strategy))
+        }
+        IntType::Path { max_depth } => {
+            Box::new(PathIntegrator::make_path(camera, sampler, max_depth))
         }
     }
 }
@@ -66,7 +70,7 @@ impl Integrator for WhittedIntegrator {
             let (p_film, time, p_lens) = self.sampler.get_camera_sample(&Point2::new(px as i32, py as i32));
             // TODO: Allow lenses to change the weighting of ray based on lens
             let ray = self.camera.get_ray(p_film.x / (IMAGE_WIDTH as f64), p_film.y / (IMAGE_HEIGHT as f64));
-            let color = self.li(&ray, self.max_depth);
+            let color = self.li(ray, self.max_depth);
             util::increment_color(grid, y as usize, x as usize, &color);
             if self.sampler.start_next_sample() == false {
                 break;
@@ -81,13 +85,13 @@ impl Integrator for WhittedIntegrator {
 impl SamplerIntegrator for WhittedIntegrator {
     fn preprocess(&mut self) {}
 
-    fn li(&mut self, ray: &Ray, depth: u32) -> Vector3<f64> {
-        let record = geometry::get_intersection(ray);
+    fn li(&mut self, ray: Ray, depth: u32) -> Vector3<f64> {
+        let record = geometry::get_intersection(&ray);
         let mut ans = util::black();
         let lights = &get_objects().lights;
         if record.is_none() {
             for light in lights {
-                ans = ans + light.le(ray);
+                ans = ans + light.le(&ray);
             }
             return ans
         }
@@ -169,7 +173,7 @@ impl Integrator for DirectLightingIntegrator {
             let (p_film, time, p_lens) = self.sampler.get_camera_sample(&Point2::new(px as i32, py as i32));
             // TODO: Allow lenses to change the weighting of ray based on lens
             let ray = self.camera.get_ray(p_film.x / (IMAGE_WIDTH as f64), p_film.y / (IMAGE_HEIGHT as f64));
-            let color = self.li(&ray, self.max_depth);
+            let color = self.li(ray, self.max_depth);
             util::increment_color(grid, y as usize, x as usize, &color);
             if self.sampler.start_next_sample() == false {
                 break;
@@ -191,13 +195,13 @@ impl SamplerIntegrator for DirectLightingIntegrator {
         }
     }
 
-    fn li(&mut self, ray: &Ray, depth: u32) -> Vector3<f64> {
-        let record = geometry::get_intersection(ray);
+    fn li(&mut self, ray: Ray, depth: u32) -> Vector3<f64> {
+        let record = geometry::get_intersection(&ray);
         let mut ans = util::black();
         let lights = &get_objects().lights;
         if record.is_none() {
             for light in lights {
-                ans = ans + light.le(ray);
+                ans = ans + light.le(&ray);
             }
             return ans
         }
@@ -228,7 +232,110 @@ impl DirectLightingIntegrator {
     }
 }
 
-fn specular_reflect(integrator: &mut dyn SamplerIntegrator, ray: &Ray, hit_record: &HitRecord, depth: u32) -> Vector3<f64> {
+struct PathIntegrator {
+    camera: Camera,
+    sampler: Samplers,
+    max_depth: u32
+}
+
+impl Integrator for PathIntegrator {
+    fn render(&mut self, grid: &mut Vec<Vec<(f64, f64, f64, u32)>>, px: u32, py: u32) {
+        let x = px % TILE_WIDTH;
+        let y = py % TILE_HEIGHT;
+        let seed = py * IMAGE_WIDTH + px;
+        Samplers::start_pixel(&mut self.sampler, &Point2::new(px as i32, py as i32));
+        loop {
+            let (p_film, time, p_lens) = self.sampler.get_camera_sample(&Point2::new(px as i32, py as i32));
+            // TODO: Allow lenses to change the weighting of ray based on lens
+            let ray = self.camera.get_ray(p_film.x / (IMAGE_WIDTH as f64), p_film.y / (IMAGE_HEIGHT as f64));
+            let color = self.li(ray, self.max_depth);
+            util::increment_color(grid, y as usize, x as usize, &color);
+            if self.sampler.start_next_sample() == false {
+                break;
+            }
+        }
+    }
+
+    fn get_sampler(&mut self) -> &mut Samplers { &mut self.sampler }
+    fn init(&mut self) { self.preprocess() }
+}
+
+impl SamplerIntegrator for PathIntegrator {
+    fn preprocess(&mut self) { }
+
+    fn li(&mut self, mut ray: Ray, depth: u32) -> Vector3<f64> {
+        // beta represents the weight of the path generated thus far:
+        // prod_{j=1}^{i-2} \frac{f(p_{j+1}\to p_j\to p_{j+1})|\cos\theta_j|}{p_\omega(p_{j+1}-p_j)}
+        // l holds the radiance of the running total, specularBounce keeps track of it
+        // the last outgoing path sampled was specular
+        let mut beta = util::white();
+        let mut l = util::black();
+        let mut specular_bounce = false;
+        let mut bounces = 0;
+        let objs = get_objects();
+        let lights = &objs.lights;
+        let inv_sqrt_three = 1f64 / 3f64.sqrt();
+        loop {
+            // if bounces > 0 {
+            //  println!("{} after {} bounces", beta, bounces);
+            // }
+            // find next vertex of current path
+            let op_record = geometry::get_intersection(&ray);
+            let is_some = op_record.is_some();
+            let mut record = op_record.unwrap_or_else(|| HitRecord::make_basic(Point3::new(0f64, 0f64, 0f64), 0f64));
+            // can usually ignore intersection with emissive object because we
+            // send a shadow ray, but if the first ray from a camera hits a light
+            // or the previous bounce is specular, then we are unable to sample
+            // the light on the previous vertex, so we must do so here
+            if bounces == 0 || specular_bounce {
+                if is_some {
+                    l = l + record.le(&-ray.dir).component_mul(&beta);
+                } else {
+                    for light in lights {
+                        l = l + light.le(&ray).component_mul(&beta);
+                    }
+                }
+            }
+            if !is_some || bounces >= self.max_depth {
+                break;
+            }
+            // now we know that record contains a valid HitRecord
+            let arena = Bump::new();
+            Material::compute_scattering(&mut record, &arena, RADIANCE, true);
+            // compute contribution from light
+            l = l + uniform_sample_one_light(&record, &mut self.sampler, false).component_mul(&beta);
+            let wo = -ray.dir;
+            // compute direction of next vertex
+            let (f, wi, pdf, flags) = record.bsdf.sample_f(&wo, &self.sampler.get_2d(), BSDF_ALL);
+            if f == util::black() || pdf == 0f64 {
+                break;
+            }
+            // update weight
+            beta = beta.component_mul(&f).scale(wi.dot(&record.shading.n).abs() / pdf);
+            specular_bounce = (flags & BSDF_SPECULAR) != 0;
+            ray = record.spawn_ray(&wi);
+            
+            // russian roulette for breaking
+            if bounces > 3 {
+                let q = 0.05f64.max(1f64 - beta.magnitude() * inv_sqrt_three); // arbitrary
+                if self.sampler.get_1d() < q {
+                    break;
+                }
+                beta = beta.scale(1f64 / (1f64 - q));
+            }
+            bounces = bounces + 1;
+        }
+        l
+    }
+}
+
+impl PathIntegrator {
+    pub fn make_path(camera: Camera, sampler: Samplers, max_depth: u32) -> Self {
+        Self { camera, sampler, max_depth }
+    }
+}
+
+fn specular_reflect(integrator: &mut dyn SamplerIntegrator, ray: Ray, hit_record: &HitRecord, depth: u32) -> Vector3<f64> {
     let sampler = integrator.get_sampler();
     let wo = hit_record.wo;
     let bxdf_type = BSDF_REFLECTION | BSDF_SPECULAR;
@@ -238,12 +345,12 @@ fn specular_reflect(integrator: &mut dyn SamplerIntegrator, ray: &Ray, hit_recor
 
     if pdf > 0f64 && color != util::black() && ns.dot(&wi).abs() != 0f64 {
         let new_ray = hit_record.spawn_ray(&wi);
-        return color.component_mul(&integrator.li(&new_ray, depth - 1)).scale(ns.dot(&wi).abs() / pdf);
+        return color.component_mul(&integrator.li(new_ray, depth - 1)).scale(ns.dot(&wi).abs() / pdf);
     }
     util::black()
 }
 
-fn specular_transmit(integrator: &mut dyn SamplerIntegrator, ray: &Ray, hit_record: &HitRecord, depth: u32) -> Vector3<f64> {
+fn specular_transmit(integrator: &mut dyn SamplerIntegrator, ray: Ray, hit_record: &HitRecord, depth: u32) -> Vector3<f64> {
     let sampler = integrator.get_sampler();
     let wo = hit_record.wo;
     let bxdf_type = BSDF_TRANSMISSION | BSDF_SPECULAR;
@@ -251,7 +358,7 @@ fn specular_transmit(integrator: &mut dyn SamplerIntegrator, ray: &Ray, hit_reco
     let ns = hit_record.shading.n;
     if pdf > 0f64 && color != util::black() && ns.dot(&wi).abs() != 0f64 {
         let new_ray = hit_record.spawn_ray(&wi);
-        return color.component_mul(&integrator.li(&new_ray, depth - 1)).scale(ns.dot(&wi).abs() / pdf);
+        return color.component_mul(&integrator.li(new_ray, depth - 1)).scale(ns.dot(&wi).abs() / pdf);
     }
     util::black()
 }
@@ -312,7 +419,7 @@ fn estimate_direct(record: &HitRecord, u_scatter: &Point2<f64>, light: &Light, u
             }
             if color != util::black() {
                 if light.is_delta_light() {
-                    ld = ld + f.component_mul(&color).scale(1f64/light_pdf);
+                    ld = ld + f.component_mul(&color).scale(1f64 / light_pdf);
                 } else {
                     let weight = power_heuristic(1, light_pdf, 1, scattering_pdf);
                     ld = ld + f.component_mul(&color).scale(weight / light_pdf);

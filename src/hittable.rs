@@ -26,9 +26,15 @@ impl <'a> Visibility<'a> {
         let dir = self.p1.p - self.p0.p;
         let ray = Ray::new_time(self.p0.p + dir * SMALL, dir, self.p1.t);
         // TODO: Use quicker intersection tests that don't make full record
-        let new_record = crate::geometry::get_objects().node.intersects(&ray, 0., INFINITY, 0).unwrap();
-        // check that the index matches
-        new_record.prim_index == self.p1.prim_index
+
+        let new_record = crate::geometry::get_objects().node.intersects(&ray, 0., INFINITY, 0); //
+        if new_record.is_none() {
+            false
+        } else {
+            let record= new_record.unwrap();
+            record.prim_index == self.p1.prim_index
+        }
+        
     }
 }
 

@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 // Defining rendering quantities
 pub const GAMMA: f64 = 1.8;
-pub const IMAGE_WIDTH: u32 = 1920 / 2;
-pub const ASPECT_RATIO: f64 = 9.0 / 9.0;
+pub const IMAGE_WIDTH: u32 = 720;
+pub const ASPECT_RATIO: f64 = 16.0 / 9.0;
 pub const SAMPLES_PER_PIXEL: u32 = 15;
 pub const MAX_DEPTH: u32 = 20;
 pub const NUM_THREADS: u32 = 6;

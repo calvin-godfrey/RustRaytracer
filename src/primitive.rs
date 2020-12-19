@@ -259,15 +259,15 @@ impl Primitive {
     */
     #[allow(unused_variables)]
     pub fn pdf(&self, record: &HitRecord, dir: &Vector3<f64>) -> f64 {
-        self.const_pdf()
-        // let ray = record.spawn_ray(dir);
-        // let new_record = Primitive::intersects_obj(self, &ray, record.t, INFINITY);
-        // if new_record.is_none() {
-        //     return 0f64
-        // }
-        // let new_record = new_record.unwrap();
-        // let dist: Vector3<f64> = record.p - new_record.p;
-        // dist.magnitude_squared() / (self.area() * new_record.n.dot(&-dir).abs())
+        // self.const_pdf()
+        let ray = record.spawn_ray(dir);
+        let new_record = Primitive::intersects_obj(self, &ray, record.t, INFINITY);
+        if new_record.is_none() {
+            return 0f64
+        }
+        let new_record = new_record.unwrap();
+        let dist: Vector3<f64> = record.p - new_record.p;
+        dist.magnitude_squared() / (self.area() * new_record.n.dot(&-dir).abs())
     }
 
     /**

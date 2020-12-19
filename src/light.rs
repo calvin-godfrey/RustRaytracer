@@ -105,7 +105,7 @@ impl Light {
                 if pdf == 0f64 || (record.p - new_record.p).magnitude_squared() == 0f64 {
                     pdf = 0f64;
                     // return dummy values
-                    return (Unit::new_normalize(util::black()), pdf, *color, Visibility::make_visibility(record, HitRecord::make_basic(Point3::new(0f64, 0f64, 0f64), 1f64)));
+                    return (Unit::new_normalize(util::black()), pdf, *color, Visibility::make_visibility(record, HitRecord::make_basic(Point3::origin(), 1f64)));
                 }
                 let wi = Unit::new_normalize(new_record.p - record.p);
                 let vis = Visibility::make_visibility(record, new_record);
