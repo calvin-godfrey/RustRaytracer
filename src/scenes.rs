@@ -9,7 +9,7 @@ use crate::util;
 use crate::light::Light;
 use crate::geometry;
 use crate::geometry::Camera;
-use crate::integrator::{IntType, LightStrategy};
+use crate::integrator::IntType;
 use crate::primitive::Primitive;
 
 // #[allow(dead_code)]
