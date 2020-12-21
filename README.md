@@ -2,8 +2,12 @@
 
 Raytracer written in Rust.
 
+Features:
+* Lambertian, specular, and microfaceted materials
+* Path tracing with multiple importance sampling
+
 Todo list:
-* Figure out why microfacets isn't working (IS and Bidirection my fix this)
-* Allow Textures to return arbitrary types
-* Importance Sampling
+* Expand on this list
 * Bidirectional Path Tracing
+* Subsurface scattering
+* Medium scattering

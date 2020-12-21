@@ -31,7 +31,7 @@ pub mod materials {
             let mat = &get_objects().materials[record.mat_index];
             // TODO: Use arena?
             match mat {
-                Material::Matte { k_d_id, sigma, bump_id } => {
+                Material::Matte { k_d_id, sigma, .. } => {
                     // Material::bump(textures, *texture_id, record); // TODO: bump
                     let sig = util::clamp(*sigma, 0., 90.);
                     let color = Texture::value(*k_d_id, record.uv.x, record.uv.y, &record.p);
@@ -45,7 +45,7 @@ pub mod materials {
                     }
                 }
                 Material::Light { .. } => {}
-                Material::Plastic { k_d_id, k_s_id, bump_id, roughness, remap_roughness } => {
+                Material::Plastic { k_d_id, k_s_id, roughness, remap_roughness, .. } => {
                     let color = Texture::value(*k_d_id, record.uv.x, record.uv.y, &record.p);
                     if color != util::black() {
                         record.bsdf = Bsdf::new(record, 1.);
@@ -65,7 +65,7 @@ pub mod materials {
                         record.bsdf.add(Bxdf::make_microfacet_reflection(specular, fresnel, distrib));
                     }
                 }
-                Material::Glass { k_r_id, k_t_id, u_roughness, v_roughness, index, bump_id, remap_roughness } => {
+                Material::Glass { k_r_id, k_t_id, u_roughness, v_roughness, index, remap_roughness , .. } => {
                     let eta = *index;
                     let mut urough = *u_roughness;
                     let mut vrough = *v_roughness;
@@ -105,7 +105,7 @@ pub mod materials {
                         }
                     }
                 }
-                Material::Metal { eta_id, k_id, rough_id, urough_id, vrough_id, bump_id, remap_roughness } => {
+                Material::Metal { eta_id, k_id, rough_id, urough_id, vrough_id, remap_roughness, .. } => {
                     // TODO: bump
                     record.bsdf = Bsdf::new(record, 1.);
                     let u_rough = if *urough_id == std::usize::MAX {
@@ -133,7 +133,7 @@ pub mod materials {
                     let mfd = MicrofacetDistribution::make_trowbridge_reitz(uroughness, vroughness, true);
                     record.bsdf.add(Bxdf::make_microfacet_reflection(util::white(), fresnel, mfd));
                 }
-                Material::Mirror { color_id, bump_id } => {
+                Material::Mirror { color_id, .. } => {
                     // bump
                     record.bsdf = Bsdf::new(record, 1.);
                     let color = Texture::value(*color_id, record.uv.x, record.uv.y, &record.p);
@@ -241,7 +241,7 @@ pub mod materials {
         }
 
         pub fn new_texture(path: &str) -> Self {
-            let img: RgbImage = image::open(path).unwrap().to_rgb();
+            let img: RgbImage = image::open(path).unwrap().to_rgb8();
             Texture::Image { img: Arc::new(img) }
         }
 

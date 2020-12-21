@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use nalgebra::{base::{Unit, Vector3}, geometry::Point2};
 use crate::util;
 use crate::consts::*;
@@ -74,20 +73,39 @@ pub fn fr_dielectric(cos_theta_i: f64, eta_i: f64, eta_t: f64) -> f64 {
 // spectral path tracing because it is wavelength dependent.
 
 pub fn fr_conductor(cos_theta_i: f64, eta: &Vector3<f64>, eta_k: &Vector3<f64>) -> Vector3<f64> {
-    let cos_theta_i = util::clamp(cos_theta_i, -1., 1.);
+    // let cos_theta_i = util::clamp(cos_theta_i, -1., 1.);
     
+    // let cos_theta_i2 = cos_theta_i * cos_theta_i;
+
+    // let eta_lens2 = eta.component_mul(eta) + eta_k.component_mul(eta_k);
+    // let eta_cos_2: Vector3<f64> = eta.scale(cos_theta_i * 2.);
+
+    // let rs_common: Vector3<f64> = eta_lens2 + Vector3::new(cos_theta_i2, cos_theta_i2, cos_theta_i2);
+    // let rs2 = (rs_common - eta_cos_2).component_div(&(rs_common + eta_cos_2));
+
+    // let rp_common = eta_lens2 * cos_theta_i2 + util::white();
+    // let rp2 = (rp_common - eta_cos_2).component_div(&(rp_common + eta_cos_2));
+
+    // (rs2 + rp2).scale(0.5)
+    let cos_theta_i = util::clamp(cos_theta_i, -1., 1.);
     let cos_theta_i2 = cos_theta_i * cos_theta_i;
+    let sin_theta_i2 = 1f64 - cos_theta_i2;
+    let eta2 = eta.component_mul(&eta);
+    let etak2 = eta_k.component_mul(&eta_k);
 
-    let eta_lens2 = eta.component_mul(eta) + eta_k.component_mul(eta_k);
-    let eta_cos_2: Vector3<f64> = eta.scale(cos_theta_i * 2.);
+    let t0 = (eta2 - etak2) - Vector3::new(sin_theta_i2, sin_theta_i2, sin_theta_i2);
+    let a2_plus_b2: Vector3<f64> = t0.component_mul(&t0) + eta2.component_mul(&etak2).scale(4f64);
+    let a2_plus_b2 = Vector3::new(a2_plus_b2.x.sqrt(), a2_plus_b2.y.sqrt(), a2_plus_b2.z.sqrt());
+    let t1 = a2_plus_b2 + Vector3::new(cos_theta_i2, cos_theta_i2, cos_theta_i2);
+    let a = (a2_plus_b2 + t0).scale(0.5);
+    let a = Vector3::new(a.x.sqrt(), a.y.sqrt(), a.z.sqrt());
+    let t2 = a.scale(2f64 * cos_theta_i);
+    let rs = (t1 - t2).component_div(&(t1 + t2));
 
-    let rs_common: Vector3<f64> = eta_lens2 + Vector3::new(cos_theta_i2, cos_theta_i2, cos_theta_i2);
-    let rs2 = (rs_common - eta_cos_2).component_div(&(rs_common + eta_cos_2));
-
-    let rp_common = eta_lens2 * cos_theta_i2 + util::white();
-    let rp2 = (rp_common - eta_cos_2).component_div(&(rp_common + eta_cos_2));
-
-    (rs2 + rp2).scale(0.5)
+    let t3 = a2_plus_b2.scale(cos_theta_i2) + Vector3::new(sin_theta_i2 * sin_theta_i2, sin_theta_i2 * sin_theta_i2, sin_theta_i2 * sin_theta_i2);
+    let t4 = t2.scale(sin_theta_i2);
+    let rp = rs.component_mul(&((t3 - t4).component_div(&(t3+t4))));
+    (rp + rs).scale(0.5)
 }
 
 #[derive(Copy, Clone)]
@@ -106,7 +124,7 @@ impl Fresnel {
             }
             Fresnel::FresnelNoOp => { util::white() }
             Fresnel::FresnelConductor { eta, k } => {
-                fr_conductor(cos_theta_i, &eta, &k)
+                fr_conductor(cos_theta_i.abs(), &eta, k)
             }
         }
     }
@@ -177,8 +195,8 @@ impl Bxdf {
                 color * (INV_PI * (a + b * max_cos * sin_alpha * tan_beta))
             }
             Bxdf::MicrofacetReflection { color, fresnel, mfd, bxdf_type } => {
-                let cos_theta_o = util::clamp(cos_theta(wo), 0.0, wo.magnitude());
-                let cos_theta_i = util::clamp(cos_theta(wi), 0.0, wi.magnitude());
+                let cos_theta_o = abs_cos_theta(wo);
+                let cos_theta_i = abs_cos_theta(wi);
                 let wh: Vector3<f64> = wi + wo; // half angle
                 if cos_theta_i == 0. || cos_theta_o == 0. {
                     return util::black();
@@ -186,9 +204,9 @@ impl Bxdf {
                 if wh == util::black() {
                     return util::black();
                 }
-                let cos = wi.dot(&(if wh.z > 0. { wh } else { -wh }));
-                let f = Fresnel::evaluate(&fresnel, cos/wh.magnitude());
                 let wh = Unit::new_normalize(wh);
+                // ensure wh is in the same hemisphere with faceforward
+                let f = Fresnel::evaluate(&fresnel, wi.dot(&util::face_forward(wh, &Vector3::new(0f64, 0f64, 1f64))));
                 let comp1: Vector3<f64> = color * MicrofacetDistribution::d(&mfd, &wh) * MicrofacetDistribution::g(&mfd, wo, wi);
                 comp1.component_mul(&f.scale(1f64 / (4f64 * cos_theta_i * cos_theta_o)))
             }
