@@ -150,13 +150,13 @@ pub fn cast_ray(ray: &Ray, depth: u32) -> Vector3<f64> {
         return Vector3::new(0.0, 0.0, 0.0);
     }
     let hit_record = get_intersection(ray);
+    let objs = get_objects();
     
     match hit_record {
         Some(mut record) => {
-            let emitted = Material::emit(&mut record);
-            if emitted != util::black() {
-                return emitted;
-            }
+            if objs.objs[record.prim_index].get_light_index() != std::usize::MAX {
+                return record.le(&-ray.dir);
+            }   
             let arena = Bump::new();
             // TODO: Use right mode
             Material::compute_scattering(&mut record, &arena, RADIANCE, true);
@@ -167,7 +167,7 @@ pub fn cast_ray(ray: &Ray, depth: u32) -> Vector3<f64> {
             }
             let new_ray = Ray::new_time(record.p, new_dir, ray.time);
             let incoming = cast_ray(&new_ray, depth - 1);
-            let ans = incoming.component_mul(&color);
+            let ans = incoming.component_mul(&color.scale(1f64 / pdf)).scale(ray.dir.dot(&record.shading.n).abs());
             ans
         }
         None => if AMBIENT_LIGHT { util::get_sky(ray) } else { util::get_background(ray) }

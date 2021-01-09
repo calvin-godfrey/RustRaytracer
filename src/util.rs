@@ -1,5 +1,6 @@
+use hittable::HitRecord;
 use image::{Rgb, RgbImage};
-use nalgebra::geometry::{Projective3, Point3, Point2};
+use nalgebra::{Matrix3, geometry::{Projective3, Point3, Point2}};
 use nalgebra::base::{Unit, Vector3, Vector2};
 use rand::prelude::*;
 use rand::distributions::Standard;
@@ -33,11 +34,6 @@ pub fn rand() -> f64 {
 
 pub fn rand_range(min: f64, max: f64) -> f64 {
     return min + (max - min) * rand();
-}
-
-pub fn draw_color(img: &mut RgbImage, i: u32, j: u32, color: &Point3<f64>, samples: u32) {
-    let ans = point_to_color(color, 1. / GAMMA, samples);
-    img.put_pixel(i, j, ans);
 }
 
 pub fn uniform_sample_cone(u: &Point2<f64>, cos_theta_max: f64) -> Vector3<f64> {
@@ -145,6 +141,39 @@ pub fn rand_cosine_dir() -> Vector3<f64> {
     Vector3::new(x, y, z)
 }
 
+/**
+Assumes normalized vector
+*/
+pub fn spherical_theta(v: &Vector3<f64>) -> f64 {
+    clamp(v.y, -1f64, 1f64).acos()
+}
+
+/**
+Assumes normalized vector
+*/
+pub fn spherical_phi(v: &Vector3<f64>) -> f64 {
+    let p: f64 = v.z.atan2(v.x);
+    if p < 0f64 {
+        p + 2f64 * PI
+    } else {
+        p
+    }
+}
+
+pub fn color_to_luminance(v: &Vector3<f64>) -> f64 {
+    0.2126 * v.x + 0.7152 * v.y + 0.0722 * v.z
+}
+
+pub fn hable(x: f64) -> f64 {
+    let a = 0.15;
+    let b = 0.5;
+    let c = 0.1;
+    let d = 0.2;
+    let e = 0.02;
+    let f = 0.3;
+    ((x * (a * x + c * b) + d * e) / (x * (a * x + b) + d * f)) - e / f
+}
+
 pub fn permute_vec(vec: &Vector3<f64>, x: usize, y: usize, z: usize) -> Vector3<f64> {
     Vector3::new(vec[x], vec[y], vec[z])
 }
@@ -203,18 +232,19 @@ pub fn thread_safe_draw_picture(img: &Mutex<image::RgbImage>, pixels: &Mutex<Vec
     for i in 0..img_guard.height() {
         let w = i as usize;
         for j in 0..img_guard.width() {
-            let tile_x: usize = (j / 16) as usize;
-            let tile_y: usize = (i / 16) as usize;
+            let tile_x: usize = (j / TILE_SIZE) as usize;
+            let tile_y: usize = (i / TILE_SIZE) as usize;
             let (r, g, b, n) = pixels_guard[w][j as usize];
             let pt = Point3::new(r / n as f64, g / n as f64, b / n as f64);
             let mut color = point_to_color(&pt, 1. / GAMMA, 1);
             if changed_tiles.contains(&(tile_x, tile_y)) {
-                let mod_x: usize = (j % 16) as usize;
-                let mod_y: usize = (i % 16) as usize;
-                if (mod_x == 0 && (mod_y < TILE_HEIGHT as usize / 4 || mod_y > 3 * TILE_HEIGHT as usize / 4)) ||
-                   (mod_x == TILE_WIDTH as usize - 1 && (mod_y < TILE_HEIGHT as usize / 4 || mod_y > 3 * TILE_HEIGHT as usize / 4)) ||
-                   (mod_y == 0 && (mod_x < TILE_WIDTH as usize / 4 || mod_x > 3 * TILE_WIDTH as usize / 4)) ||
-                   (mod_y == TILE_WIDTH as usize - 1 && (mod_x < TILE_WIDTH as usize / 4 || mod_x > 3 * TILE_WIDTH as usize / 4)) {
+                let mod_x: usize = (j % TILE_SIZE) as usize;
+                let mod_y: usize = (i % TILE_SIZE) as usize;
+                // yellow border around active tiles
+                if (mod_x == 0 && (mod_y < TILE_SIZE as usize / 4 || mod_y > 3 * TILE_SIZE as usize / 4)) ||
+                   (mod_x == TILE_SIZE as usize - 1 && (mod_y < TILE_SIZE as usize / 4 || mod_y > 3 * TILE_SIZE as usize / 4)) ||
+                   (mod_y == 0 && (mod_x < TILE_SIZE as usize / 4 || mod_x > 3 * TILE_SIZE as usize / 4)) ||
+                   (mod_y == TILE_SIZE as usize - 1 && (mod_x < TILE_SIZE as usize / 4 || mod_x > 3 * TILE_SIZE as usize / 4)) {
                        color = Rgb([255, 211, 0]);
                    }
             }
@@ -235,10 +265,6 @@ pub fn thread_safe_draw_picture(img: &Mutex<image::RgbImage>, pixels: &Mutex<Vec
 * Refract vec over `n` with given IoR
 */
 pub fn refract(vec: &Vector3<f64>, n: &Unit<Vector3<f64>>, eta: f64) -> Option<Vector3<f64>> {
-    // let cost = -vec.dot(n);
-    // let out_para = (vec.as_ref() + n.as_ref().scale(cost)).scale(eta);
-    // let out_perp = -n.scale((1. - out_para.dot(&out_para)).sqrt());
-    // out_para + out_perp
     let cos_theta_i = n.dot(vec) / vec.magnitude(); // make sure cos_theta_i is in [0, 1]
     let sin2_theta_i = 0f64.max(1f64 - cos_theta_i * cos_theta_i);
     let sin2_theta_t = eta * eta * sin2_theta_i;
@@ -263,18 +289,81 @@ pub fn draw_picture(image: &mut RgbImage, pixels: &Vec<Vec<(f64, f64, f64, u32)>
     image.save(path).unwrap();
 }
 
+fn aces_comp(x: f64) -> f64 {
+    let x = x * 0.6;
+    let a = 2.51;
+    let b = 0.03;
+    let c = 2.43;
+    let d = 0.59;
+    let e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0f64, 1f64);
+}
+
+fn aces_computation_component(x: f64) -> f64 {
+    let a = x * (x + 0.0245786) - 0.000090537;
+    let b = x * (0.983729 * x + 0.4329510) + 0.238081;
+    a / b
+}
+
+fn aces_computation(v: &Vector3<f64>) -> Vector3<f64> {
+    Vector3::new(aces_computation_component(v.x), aces_computation_component(v.y), aces_computation_component(v.z))
+}
+
+fn aces_full(v: &Vector3<f64>) -> Vector3<f64> {
+    let input = Matrix3::new(0.59719, 0.35458, 0.04823,
+                                                 0.076, 0.9083, 0.01566,
+                                                 0.0284, 0.13383, 0.833777);
+    let output = Matrix3::new(1.60475, -0.53108, -0.07367,
+                                                  -0.10208, 1.10813, -0.00605,
+                                                  -0.00327, -0.07276, 1.0762);
+
+    let v = input * v;
+    let v = aces_computation(&v);
+    output * v
+}
+
+fn aces_approx(v: &Vector3<f64>) -> Vector3<f64> {
+    Vector3::new(aces_comp(v.x), aces_comp(v.y), aces_comp(v.z))
+}
+
 fn point_to_color(vec: &Point3<f64>, gamma: f64, samples: u32) -> Rgb<u8> {
     let scale: f64 = 1. / (samples as f64);
-    let r: f64 = clamp(vec[0] * scale, 0., 1.);
-    let g: f64 = clamp(vec[1] * scale, 0., 1.);
-    let b: f64 = clamp(vec[2] * scale, 0., 1.);
-    if r == std::f64::NAN || g == std::f64::NAN || b == std::f64::NAN {
-        println!("BAD");
+    let mut r: f64 = vec[0] * scale;
+    let mut g: f64 = vec[1] * scale;
+    let mut b: f64 = vec[2] * scale;
+    // apply tonemapping
+    if TONE_MAPPING {
+        // let sig = r.max(g).max(b);
+        let new_color = Vector3::new(r, g, b);
+        // // second vector comes from eye response
+        // let luma = color_to_luminance(&new_color);
+        // let coeff = (sig - 0.18).max(1e-6) / sig.max(1e-6);
+        // let coeff = coeff.powi(20);
+        // let new_color = mix(&new_color, &Vector3::new(luma, luma, luma), coeff);
+        // let sig = mix_f(sig, luma, coeff);
+        // let final_color = new_color.scale(hable(sig) / sig);
+        let final_color = aces_approx(&new_color);
+        r = final_color[0];
+        g = final_color[1];
+        b = final_color[2];
+
+    } else {
+        r = clamp(r, 0f64, 1f64);
+        g = clamp(g, 0f64, 1f64);
+        b = clamp(b, 0f64, 1f64);
     }
     Rgb([(r.powf(gamma) * 256.).round() as u8,
-         (g.powf(gamma) * 256.).round() as u8,
-         (b.powf(gamma) * 256.).round() as u8])
+        (g.powf(gamma) * 256.).round() as u8,
+        (b.powf(gamma) * 256.).round() as u8])
 
+}
+
+pub fn mix(from: &Vector3<f64>, to: &Vector3<f64>, x: f64) -> Vector3<f64> {
+    from.scale(1f64 - x) + to.scale(x)
+}
+
+pub fn mix_f(from: f64, to: f64, x: f64) -> f64 {
+    from * (1f64 - x) + to * x
 }
 
 #[allow(dead_code)]
@@ -382,6 +471,15 @@ pub fn same_hemisphere(v: &Vector3<f64>, w: &Vector3<f64>) -> bool {
 pub fn make_spherical(sin_t: f64, cos_t: f64, phi: f64) -> Vector3<f64> {
     Vector3::new(sin_t * phi.cos(), sin_t * phi.sin(), cos_t)
 }
+
+pub fn correct_shading_normal(record: &HitRecord, wo: &Vector3<f64>, wi: &Vector3<f64>, mode: u8) -> f64 {
+    if mode == RADIANCE {
+        1f64
+    } else {
+        (wo.dot(&record.shading.n).abs() * wi.dot(&record.shading.n).abs()) / (wo.dot(&record.n).abs() * wi.dot(&record.n).abs())
+    }
+}
+
 
 // approximation of error function
 pub fn erf(x: f64) -> f64 {

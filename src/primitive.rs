@@ -219,7 +219,7 @@ impl Primitive {
             Primitive::XYRect { x0, y0, x1, y1, k, mat_index, transform, .. } => {xy_rect_intersect(*x0, *y0, *x1, *y1, *k, *mat_index, transform, ray, tmin, tmax)}
             Primitive::XZRect { x0, z0, x1, z1, k, mat_index, transform, .. } => {xz_rect_intersect(*x0, *z0, *x1, *z1, *k, *mat_index, transform, ray, tmin, tmax)}
             Primitive::YZRect { y0, z0, y1, z1, k, mat_index, transform, .. } => {yz_rect_intersect(*y0, *z0, *y1, *z1, *k, *mat_index, transform, ray, tmin, tmax)}
-            Primitive::FlipFace { .. } => { None } // FlipFace inside a flip face, should never happen
+            Primitive::FlipFace { obj } => { Primitive::intersects_obj(obj.as_ref(), ray, tmin, tmax) }
         }
     }
 
@@ -261,13 +261,13 @@ impl Primitive {
     pub fn pdf(&self, record: &HitRecord, dir: &Vector3<f64>) -> f64 {
         // self.const_pdf()
         let ray = record.spawn_ray(dir);
-        let new_record = Primitive::intersects_obj(self, &ray, record.t, INFINITY);
+        let new_record = Primitive::intersects_obj(self, &ray, 0f64, INFINITY);
         if new_record.is_none() {
             return 0f64
         }
         let new_record = new_record.unwrap();
         let dist: Vector3<f64> = record.p - new_record.p;
-        dist.magnitude_squared() / (self.area() * new_record.n.dot(&-dir).abs())
+        dist.magnitude_squared() / (self.area() * new_record.n.dot(&-dir).abs()) // convert from area pdf to solid angle pdf
     }
 
     /**

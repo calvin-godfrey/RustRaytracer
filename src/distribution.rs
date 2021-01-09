@@ -1,16 +1,34 @@
+use nalgebra::geometry::Point2;
 use crate::util;
 
 pub struct Distribution1D {
-    func: Vec<f64>, // function evaluated at `n` values
+    pub func: Vec<f64>, // function evaluated at `n` values
     cdf: Vec<f64>, // cdf of function
-    func_int: f64 // integral of function
+    pub func_int: f64 // integral of function
+}
+
+impl PartialEq for Distribution1D {
+    fn eq(&self, other: &Self) -> bool {
+        if self.func_int != other.func_int {
+            return false;
+        }
+        if self.func.len() != other.func.len() {
+            return false;
+        }
+        for i in 0usize..self.func.len() {
+            if self.func[i] != other.func[i] {
+                return false;
+            }
+        }
+        true
+    }
 }
 
 impl Distribution1D {
     pub fn make_distribution(f: &[f64]) -> Self {
         let n = f.len();
         let func = f.to_owned(); // make a copy of data
-        let mut cdf = Vec::with_capacity(n+ 1);
+        let mut cdf = vec![0f64; n + 1];
         cdf[0] = 0f64;
 
         for i in 1..(n + 1) {
@@ -25,7 +43,7 @@ impl Distribution1D {
             }
         } else {
             for i in 1..(n + 1) {
-                cdf[i] = cdf[i] / (n as f64);
+                cdf[i] = cdf[i] / func_int;
             }
         }
         Self { func, cdf, func_int }
@@ -43,7 +61,7 @@ impl Distribution1D {
         if self.cdf[offset + 1] - self.cdf[offset] > 0f64 {
             du = du / (self.cdf[offset + 1] - self.cdf[offset]);
         }
-        let pdf = self.func[offset] / self.func_int;
+        let pdf = if self.func_int > 0f64 { self.func[offset] / self.func_int } else { 0f64 };
         let x = (offset as f64 + du) / (self.count() as f64);
         (x, pdf, offset)
     }
@@ -60,6 +78,59 @@ impl Distribution1D {
 
     pub fn discrete_pdf(&self, index: usize) -> f64 {
         self.func[index] / (self.func_int * self.count() as f64)
+    }
+}
+
+pub struct Distribution2D {
+    p_cond_v: Vec<Distribution1D>,
+    p_marginal: Distribution1D,
+}
+
+impl PartialEq for Distribution2D {
+    fn eq(&self, other: &Self) -> bool {
+        if !self.p_marginal.eq(&other.p_marginal) {
+            return false;
+        }
+        if self.p_cond_v.len() != other.p_cond_v.len() {
+            return false;
+        }
+        for i in 0usize..self.p_cond_v.len() {
+            if !self.p_cond_v[i].eq(&other.p_cond_v[i]) {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+impl Distribution2D {
+    pub fn make_distribution_2d(f: &[f64], nu: usize, nv: usize) -> Self {
+        let mut p_cond_v: Vec<Distribution1D> = Vec::new();
+        for v in 0..nv {
+            p_cond_v.push(Distribution1D::make_distribution(&f[v..(v + nu)]));
+        }
+        let mut marginal_func: Vec<f64> = Vec::new();
+        for v in 0..nv {
+            marginal_func.push(p_cond_v[v].func_int);
+        }
+        Self { p_cond_v, p_marginal: Distribution1D::make_distribution(&marginal_func) }
+    }
+
+    /**
+    Returns sample, pdf
+    */
+    pub fn sample_continuous(&self, u: &Point2<f64>) -> (Point2<f64>, f64) {
+        let (d1, pdf_1, v) = self.p_marginal.sample_continuous(u[1]);
+        let (d0, pdf_0, ..) = self.p_cond_v[v].sample_continuous(u[0]);
+        (Point2::new(d0, d1), pdf_1 * pdf_0)
+    }
+
+    pub fn pdf(&self, p: &Point2<f64>) -> f64 {
+        let iu = (p[0] * self.p_cond_v[0].count() as f64) as usize;
+        let iu = iu.max(0usize).min(self.p_cond_v[0].count() - 1);
+        let iv = (p[1] * self.p_marginal.count() as f64) as usize;
+        let iv = iv.max(0usize).min(self.p_marginal.count() - 1);
+        self.p_cond_v[iv].func[iu] / self.p_marginal.func_int
     }
 }
 

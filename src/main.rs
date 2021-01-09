@@ -26,7 +26,9 @@ mod distribution;
 
 fn main() {
     let now = SystemTime::now();
-    let (path, camera, sampler, int_type) = two_dragons();
+    let int_type = IntType::Path { max_depth: MAX_DEPTH, invisible_light: false };
+    // let int_type = IntType::Basic { max_depth: MAX_DEPTH };
+    let (path, camera, sampler) = material_hdr();
     tile_multithread(path, camera, sampler, int_type);
     match now.elapsed() {
         Ok(elapsed) => {
@@ -58,8 +60,8 @@ fn tile_multithread(path: String, camera: Camera, sampler: Samplers, int_type: I
     let mut thread_vec: Vec<thread::JoinHandle<()>> = Vec::new();
 
     // START TILE STUFF
-    let num_tiles_wide = (IMAGE_WIDTH) / TILE_WIDTH + 1;
-    let num_tiles_tall = (IMAGE_HEIGHT) / TILE_HEIGHT + 1;
+    let num_tiles_wide = (IMAGE_WIDTH) / TILE_SIZE + 1;
+    let num_tiles_tall = (IMAGE_HEIGHT) / TILE_SIZE + 1;
     let mut started_tiles: Vec<Vec<i32>> = Vec::new();
     for i in 0..num_tiles_tall {
         started_tiles.push(Vec::new());
@@ -103,10 +105,10 @@ fn tile_multithread(path: String, camera: Camera, sampler: Samplers, int_type: I
                 }
                 drop(tiles); // no longer need to hold the lock
                 let mut local_img: Vec<Vec<(f64, f64, f64, u32)>> = util::make_empty_image(16, 16);
-                for y in 0..TILE_HEIGHT {
-                    for x in 0..TILE_WIDTH {
-                        let px = tx * TILE_WIDTH + x;
-                        let py = ty * TILE_HEIGHT + y;
+                for y in 0..TILE_SIZE {
+                    for x in 0..TILE_SIZE {
+                        let px = tx * TILE_SIZE + x;
+                        let py = ty * TILE_SIZE + y;
                         if py >= IMAGE_HEIGHT {
                             continue;
                         }

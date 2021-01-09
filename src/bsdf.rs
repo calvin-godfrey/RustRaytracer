@@ -99,6 +99,7 @@ impl Bsdf {
             }
         }
         assert!(used_index != std::usize::MAX);
+        let sampled_type = bxdf.get_type();
         let wo = Unit::new_normalize(self.world_to_local(wow)).into_inner();
         if wo.z == 0. {
             (util::black(), util::black(), 0f64, 0u8);
@@ -134,7 +135,7 @@ impl Bsdf {
             }
         }
         
-        (color, wiw, pdf, 0u8)
+        (color, wiw, pdf, sampled_type)
     }
 
     pub fn pdf(&self, wow: &Vector3<f64>, wiw: &Vector3<f64>, flags: u8) -> f64 {

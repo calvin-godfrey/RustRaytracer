@@ -1,8 +1,9 @@
 #![allow(dead_code, unused_variables)] // TODO: Remove this
 use nalgebra::base::{Unit, Vector3};
 use nalgebra::geometry::{Projective3, Point3, Point2};
-use util::cosine_hemisphere_pdf;
-use crate::hittable::{Visibility, HitRecord};
+use util::{color_to_luminance, cosine_hemisphere_pdf};
+use crate::{distribution::Distribution2D, hittable::{Visibility, HitRecord}};
+use crate::material::materials::Texture;
 use crate::geometry::{ONB, Ray, get_objects};
 use crate::consts::*;
 use crate::util;
@@ -28,6 +29,7 @@ pub enum Light {
     Spot { flags: u8, to_world: Projective3<f64>, to_obj: Projective3<f64>, n_samples: u32, p: Point3<f64>, color: Vector3<f64>, cos_width: f64, cos_falloff: f64 },
     Distant { flags: u8, to_world: Projective3<f64>, to_obj: Projective3<f64>, n_samples: u32, color: Vector3<f64>, dir: Vector3<f64>, world_center: Point3<f64>, world_radius: f64 },
     Diffuse { flags: u8, to_world: Projective3<f64>, to_obj: Projective3<f64>, n_samples: u32, color: Vector3<f64>, prim_index: usize, area: f64, two_sided: bool, is_mesh: bool },
+    Infinite { flags: u8, to_world: Projective3<f64>, to_obj: Projective3<f64>, n_samples: u32, text_id: usize, world_center: Point3<f64>, world_radius: f64, dist: Distribution2D }
 }
 
 impl Light {
@@ -37,6 +39,7 @@ impl Light {
             Light::Spot { flags, .. } => { *flags }
             Light::Distant { flags, .. } => { *flags }
             Light::Diffuse { flags, .. } => { *flags }
+            Light::Infinite { flags, .. } => { *flags }
         }
     }
 
@@ -46,6 +49,7 @@ impl Light {
             Light::Spot { n_samples, .. } => { *n_samples }
             Light::Distant { n_samples, .. } => { *n_samples }
             Light::Diffuse { n_samples, .. } => { *n_samples }
+            Light::Infinite { n_samples, .. } => { *n_samples }
         }
     }
 
@@ -55,6 +59,7 @@ impl Light {
             Light::Spot { to_obj, .. } => { to_obj }
             Light::Distant { to_obj, .. } => { to_obj }
             Light::Diffuse { to_obj, .. } => { to_obj }
+            Light::Infinite { to_obj, .. } => { to_obj }
         }
     }
 
@@ -68,6 +73,10 @@ impl Light {
     pub fn is_delta_light(&self) -> bool {
         let flags = self.get_flags();
         return (flags & DELTA_POSITION) > 0 || (flags & DELTA_DIRECTION) > 0;
+    }
+
+    pub fn is_infinite(&self) -> bool {
+        self.get_flags() & INFINITE > 0
     }
 
     /**
@@ -98,7 +107,7 @@ impl Light {
                 let vis = Visibility::make_visibility(record, new_record);
                 (Unit::new_normalize(wi), pdf, *color, vis)
             }
-            Light::Diffuse { prim_index, color, area, two_sided, .. } => {
+            Light::Diffuse { prim_index, color, area, .. } => {
                 let primitive = &get_objects().objs[*prim_index];
                 let (mut new_record, mut pdf, wi) = primitive.sample(record, u);
                 new_record.prim_index = *prim_index;
@@ -108,8 +117,33 @@ impl Light {
                     return (Unit::new_normalize(util::black()), pdf, *color, Visibility::make_visibility(record, HitRecord::make_basic(Point3::origin(), 1f64)));
                 }
                 let wi = Unit::new_normalize(new_record.p - record.p);
+                // println!("Picked {}, dir from {} is ({}, {}, {})", new_record.p, record.p, wi.x, wi.y, wi.z);
+                let l = self.l(&new_record, &-wi);
                 let vis = Visibility::make_visibility(record, new_record);
-                (wi, pdf, *color, vis)
+                (wi, pdf, l, vis)
+            }
+            Light::Infinite { to_world, to_obj, n_samples, text_id, dist, world_radius, .. } => {
+                let (uv, map_pdf) = dist.sample_continuous(u);
+                if map_pdf == 0f64 {
+                    // dummy
+                    return (Unit::new_normalize(util::black()), 0f64, util::black(), Visibility::make_visibility(record, HitRecord::make_basic(Point3::origin(), 1f64)));
+                }
+                // convert point to direction
+                let theta = uv[1] * PI;
+                let phi = uv[0] * 2f64 * PI;
+                let cos_theta = theta.cos();
+                let sin_theta = theta.sin();
+                let cos_phi = phi.cos();
+                let sin_phi = phi.sin();
+                let v = Vector3::new(sin_theta * cos_phi, sin_theta * sin_phi, cos_theta);
+                let wi = to_world.transform_vector(&v);
+                let mut pdf = map_pdf / (2f64 * PI * PI * sin_theta); // jacobian from u, v coordinates to theta, phi
+                if sin_theta == 0f64 {
+                    pdf = 0f64;
+                }
+                let vis = Visibility::make_visibility(record, HitRecord::make_basic(record.p + wi.scale(2f64 * world_radius), record.t));
+                let color = Texture::value(*text_id, uv[0], uv[1], &Point3::origin());
+                (Unit::new_normalize(wi), pdf, color, vis)
             }
         }
     }
@@ -126,6 +160,9 @@ impl Light {
             Light::Diffuse { two_sided, color, area, .. } => {
                 (if *two_sided { 2f64 } else { 1f64 }) * color * *area * PI
             }
+            Light::Infinite { text_id, world_radius, .. } => {
+                Texture::value(*text_id, 0.5, 0.5, &Point3::origin()).scale(PI * world_radius * world_radius)
+            }
         }
     }
 
@@ -136,6 +173,16 @@ impl Light {
             Light::Spot {.. } => { 0. }
             Light::Distant { .. } => { 0. }
             Light::Diffuse { prim_index, .. } => { prims[*prim_index].pdf(record, wi) }
+            Light::Infinite { to_world, dist, .. } => {
+                let wi = to_world.transform_vector(wi);
+                let theta = util::spherical_theta(&wi);
+                let phi = util::spherical_phi(&wi);
+                let sin_theta = theta.sin();
+                if sin_theta == 0f64 {
+                    return 0f64;
+                }
+                dist.pdf(&Point2::new(phi * INV_2PI, theta * INV_PI)) / (2f64 * PI * PI * sin_theta)
+            }
         }
     }
 
@@ -198,6 +245,35 @@ impl Light {
                 let ray = new_record.spawn_ray(&w);
                 (pdf_pos, pdf_dir, ray, normal, *color)
             }
+            Light::Infinite {to_world, text_id, world_center, world_radius, dist, .. } => {
+                let (uv, map_pdf) = dist.sample_continuous(u1);
+                if map_pdf == 0f64 {
+                    // dummy values
+                    return (0f64, 0f64, Ray::new(Point3::origin(), util::black()), util::black(), util::black())
+                }
+                let theta = uv[1] * PI;
+                let phi = uv[0] * 2f64 * PI;
+                let cos_theta = theta.cos();
+                let sin_theta = theta.sin();
+                let cos_phi = phi.cos();
+                let sin_phi = phi.sin();
+                // negative so that 
+                let d = -to_world.transform_vector(&Vector3::new(sin_theta * cos_phi, sin_theta * sin_phi, cos_theta));
+
+                let (v1, v2) = util::make_coordinate_system(&d);
+                let cd = util::concentric_sample_disk(u2);
+                let p_disk = world_center +(cd.x * v1 + cd.y * v2).scale(*world_radius);
+                let ray = Ray::new(p_disk + -d.scale(*world_radius), d);
+                // compute both pdfs
+                let pdf_dir = if sin_theta == 0f64 {
+                    0f64
+                } else {
+                    map_pdf / (2f64 * PI * PI * sin_theta) // jacobian
+                };
+                let pdf_pos = 1f64 / (PI * *world_radius * *world_radius);
+                let color = Texture::value(*text_id, uv[0], uv[1], &Point3::origin());
+                (pdf_pos, pdf_dir, ray, d, color)
+            }
         }
     }
 
@@ -225,12 +301,22 @@ impl Light {
                 };
                 (pdf_pos, pdf_dir)
             }
+            Light::Infinite { flags, to_world, to_obj, n_samples, text_id, world_center, world_radius, dist } => {
+                let d = -to_obj.transform_vector(&ray.dir);
+                let theta = util::spherical_theta(&d);
+                let phi = util::spherical_phi(&d);
+                let uv = Point2::new(phi * INV_2PI, theta * INV_PI);
+                let map_pdf = dist.pdf(&uv);
+                let pdf_dir = map_pdf / (2f64 * PI * PI * theta.sin());
+                let pdf_pos = 1f64 / (PI * *world_radius * *world_radius);
+                (pdf_pos, pdf_dir)
+            }
         }
     }
 
     pub fn l(&self, record: &HitRecord, w: &Vector3<f64>) -> Vector3<f64> {
         match self {
-            Light::Diffuse { two_sided, color, .. } => {
+            Light::Diffuse { flags, to_world, to_obj, n_samples, color, prim_index, area, two_sided, is_mesh } => {
                 if record.n.dot(w) > 0f64 || *two_sided {
                     *color
                 } else {
@@ -243,7 +329,14 @@ impl Light {
 
     // only nonzero for InfiniteAreaLights
     pub fn le(&self, ray: &Ray) -> Vector3<f64> {
-        util::black()
+        match self {
+            Light::Infinite { to_obj, text_id, .. } => {
+                let w = Unit::new_normalize(to_obj.transform_vector(&ray.dir));
+                let uv = Point2::new(util::spherical_phi(&w) * INV_2PI, util::spherical_theta(&w) * INV_PI);
+                Texture::value(*text_id, uv[0], uv[1], &Point3::origin())
+            }
+            _ =>  {util::black() }
+        }
     }
 
     pub fn set_prim_index(&mut self, index: usize) {
@@ -280,5 +373,28 @@ impl Light {
         let prim = &get_objects().objs[prim_index];
         let flags = AREA;
         Light::Diffuse { flags, to_world, to_obj: to_world.inverse(), n_samples, two_sided, color, prim_index, area: prim.area(), is_mesh }
+    }
+
+    pub fn make_infinite_light(to_world: Projective3<f64>, n_samples: u32, text_id: usize) -> Self {
+        let to_obj = to_world.inverse();
+        let flags = INFINITE;
+        let texture = &get_objects().textures[text_id];
+        let dim = texture.get_size();
+        let width = dim[0] as usize * 2;
+        let height = dim[1] as usize * 2;
+        let mut img = vec![0f64; width * height];
+        let filter = 1f64 / (width.min(height) as f64);
+        for v in 0usize..height {
+            let vp = (v as f64 + 0.5) / (height as f64);
+            let sin_theta = (PI * (v as f64 + 0.5) / (height as f64)).sin(); // don't fully understand this
+            for u in 0usize..width {
+                let up = (u as f64) / (width as f64);
+                let color = texture.get_value(up, vp, &Point3::origin());
+                img[u + v * width] = color_to_luminance(&color);
+                img[u + v * width] = img[u + v * width] * sin_theta;
+            }
+        }
+        let dist = Distribution2D::make_distribution_2d(&img, width, height);
+        Light::Infinite { dist, n_samples, text_id, to_world, to_obj, flags, world_center: Point3::origin(), world_radius: 10000f64 }
     }
 }

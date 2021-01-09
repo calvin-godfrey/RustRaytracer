@@ -1,8 +1,9 @@
 pub mod materials {
     use nalgebra::base::Vector3;
-    use nalgebra::geometry::{Point3};
-    use std::sync::Arc;
-    use image::RgbImage;
+    use nalgebra::geometry::{Point3, Point2};
+    use std::{io::{BufRead, BufReader}, sync::Arc};
+    use std::fs::File;
+    use image::{RgbImage, Rgb};
     use bumpalo::Bump;
     use crate::util;
     use crate::hittable::HitRecord;
@@ -56,7 +57,7 @@ pub mod materials {
                         if Bsdf::is_empty(&record.bsdf) {
                             record.bsdf = Bsdf::new(record, 1.);
                         }
-                        let fresnel: Fresnel = Fresnel::FresnelDielectric {eta_i: 1., eta_t: 1.5};
+                        let fresnel: Fresnel = Fresnel::FresnelDielectric {eta_i: 1.5, eta_t: 1.};
                         let mut rough = *roughness;
                         if *remap_roughness {
                             rough = trowbridge_reitz_roughness_to_alpha(rough);
@@ -144,17 +145,6 @@ pub mod materials {
             }
         }
     
-        #[allow(unused_variables)]
-        pub fn emit(record: &mut HitRecord) -> Vector3<f64> {
-            let mat = &get_objects().materials[record.mat_index];
-            match mat {
-                Material::Light { texture_id } => {
-                    Texture::value(*texture_id, record.uv.x, record.uv.y, &record.p)
-                }
-                _ => {util::black()}
-            }
-        }
-    
         /**
         Sigma should be in the range [0, 90]
         */
@@ -198,19 +188,29 @@ pub mod materials {
         },
         Perlin {
             perlin: perlin::Perlin,
+        },
+        Hdr {
+            meta: image::hdr::HdrMetadata,
+            data: Vec<Rgb<f32>>,
         }
     }
 
     impl Texture {
-
         pub fn value(index: usize, u: f64, v: f64, p: &Point3<f64>) -> Vector3<f64> {
-            match &get_objects().textures[index] {
+            Texture::get_value(&get_objects().textures[index], u, v, p)
+        }
+
+        /**
+        p is only used to checkered and perlin
+        */
+        pub fn get_value(&self, u: f64, v: f64, p: &Point3<f64>) -> Vector3<f64> {
+            match self {
                 Texture::Image { img } => {
-                    Texture::image_value(img, u, v, p)
+                    Texture::image_value(img, u, v)
                 },
                 Texture::SolidColor { color } => { color.clone() },
                 Texture::Checkered { even, odd, frequency} => {
-                    let mult = (frequency * p.x).sin() * (frequency * p.y).sin() * (frequency * p.z).sin();
+                    let mult = (frequency * u * 2f64 * PI).sin() * (frequency * v * 2f64 * PI).sin();
                     if mult < 0. {
                         Texture::value(*even, u, v, p)
                     } else {
@@ -221,18 +221,46 @@ pub mod materials {
                     let noise = perlin.turb(p, 7);
                     util::white().scale(0.5 * (1. + (perlin.scale * p.z + 10. * noise).sin()))
                 }
+                Texture::Hdr { meta, data } => {
+                    let width = meta.width;
+                    let height = meta.height;
+                    let x = ((1f64 - u) * width as f64).round() as u32;
+                    let y = (v * height as f64).round() as u32;
+                    let x = x % width;
+                    let y = y % height;
+                    let rgb = data[(y * width + x) as usize];
+                    let rgbe = image::hdr::to_rgbe8(rgb);
+                    let r = rgbe.c[0] as u32;
+                    let g = rgbe.c[1] as u32;
+                    let b = rgbe.c[2] as u32;
+                    let v = (2f64).powi(rgbe.e as i32 - 128);
+                    let r = (r as f64 + 0.5) * v / 256f64;
+                    let g = (g as f64 + 0.5) * v / 256f64;
+                    let b = (b as f64 + 0.5) * v / 256f64;
+                    Vector3::new(r, g, b)
+                }
             }
         }
 
-        fn image_value(img: &Arc<RgbImage>, u: f64, v: f64, _p: &Point3<f64>) -> Vector3<f64> {
+        pub fn get_size(&self) -> Point2<u32> {
+            match self {
+                Texture::Image { img } => {
+                    Point2::new(img.width(), img.height())
+                }
+                Texture::SolidColor { .. } => { Point2::new(1, 1) }
+                Texture::Checkered { .. } => { Point2::origin() }
+                Texture::Perlin { .. } => { Point2::origin() }
+                Texture::Hdr { meta, .. } => {
+                    Point2::new(meta.width, meta.height)
+                }
+            }
+        }
+
+        fn image_value(img: &Arc<RgbImage>, u: f64, v: f64) -> Vector3<f64> {
             let mut x: u32 = (u * img.width() as f64).round() as u32;
             let mut y: u32 = ((1. - v) * img.height() as f64).round() as u32;
-            if y == img.height() {
-                y = y - 1;
-            }
-            if x == img.width() {
-                x = x - 1;
-            }
+            x = x % img.width(); // wrap image in x
+            y = y % img.height(); // and y directions
             let from_image = img.get_pixel(x, y);
             let r: f64 = from_image[0] as f64 / 255.;
             let g: f64 = from_image[1] as f64 / 255.;
@@ -252,6 +280,35 @@ pub mod materials {
         pub fn new_perlin(scale: f64) -> Self {
             let perlin = perlin::Perlin::new(256, scale);
             Texture::Perlin { perlin }
+        }
+        pub fn new_hdr(path: &str) -> Self {
+            let file = File::open(path);
+            match file {
+                Ok(f) => {
+                    let f = BufReader::new(f);
+                    let decoder = image::hdr::HdrDecoder::new(f);
+                    match decoder {
+                        Ok(d) => {
+                            let meta = d.metadata();
+                            let data = d.read_image_hdr();
+                            match data {
+                                Ok(good_data) => {
+                                    return Texture::Hdr { meta, data: good_data }
+                                }
+                                Err(_) => {
+                                    panic!("Failure to decode data from hdr {}", path);
+                                }
+                            }
+                        }
+                        Err(_) => {
+                            panic!("Failure decoding hdr {}", path);
+                        }
+                    }
+                }
+                Err(_) => {
+                    panic!("Unable to open file {}", path);
+                }
+            }
         }
     }
 }

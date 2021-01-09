@@ -119,7 +119,7 @@ impl Fresnel {
     pub fn evaluate(fresnel: &Fresnel, cos_theta_i: f64) -> Vector3<f64> {
         match fresnel {
             Fresnel::FresnelDielectric { eta_i, eta_t } => {
-                let value = fr_dielectric(cos_theta_i, *eta_i, *eta_t);
+                let value = fr_dielectric(cos_theta_i.abs(), *eta_t, *eta_i);
                 Vector3::new(value, value, value)
             }
             Fresnel::FresnelNoOp => { util::white() }
@@ -287,6 +287,7 @@ impl Bxdf {
             Bxdf::LambertianReflection { color, bxdf_type } => {Bxdf::default_sample_f(bxdf, wo, sample, sample_type)}
             Bxdf::OrenNayer { color, a, b, bxdf_type } => {Bxdf::default_sample_f(bxdf, wo, sample, sample_type)}
             Bxdf::MicrofacetReflection { color, fresnel, mfd, bxdf_type } => {
+                // Bxdf::default_sample_f(bxdf, wo, sample, sample_type)
                 if wo.z == 0. { return (util::black(), util::black(), 0.); }
                 let wh = MicrofacetDistribution::sample_wh(mfd, &wo, sample);
                 if wo.dot(&wh) < 0. { (util::black(), util::black(), 0.); }
@@ -304,7 +305,6 @@ impl Bxdf {
                 match transmission {
                     Some(wi) => {
                         let pdf = Bxdf::pdf(bxdf, wo, &wi);
-                        // println!("{}-----------{}", wo, wi);
                         let color = Bxdf::f(bxdf, wo, &wi);
                         (color, wi, pdf)
                     }
@@ -448,6 +448,7 @@ impl Bxdf {
             Bxdf::LambertianReflection { color, bxdf_type } => { Bxdf::default_pdf(wo, wi) }
             Bxdf::OrenNayer { color, a, b, bxdf_type } => { Bxdf::default_pdf(wo, wi) }
             Bxdf::MicrofacetReflection { color, fresnel, mfd, bxdf_type } => {
+                // Bxdf::default_pdf(wo, wi)
                 if !util::same_hemisphere(wo, wi) {
                     return 0.;
                 }
@@ -512,6 +513,7 @@ impl Bxdf {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_name(&self) -> &str {
         match self {
             Bxdf::ScaledBxdf { .. } => { "Scaled" }

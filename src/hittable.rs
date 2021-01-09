@@ -22,17 +22,17 @@ impl <'a> Visibility<'a> {
         Visibility { p0, p1 }
     }
 
-    pub fn unoccluded(&self) -> bool {
+    pub fn unoccluded(&self, infinite_light: bool) -> bool {
         let dir = self.p1.p - self.p0.p;
         let ray = Ray::new_time(self.p0.p + dir * SMALL, dir, self.p1.t);
         // TODO: Use quicker intersection tests that don't make full record
 
-        let new_record = crate::geometry::get_objects().node.intersects(&ray, 0., INFINITY, 0); //
+        let new_record = crate::geometry::get_objects().node.intersects(&ray, 0., INFINITY, 0);
         if new_record.is_none() {
-            false
+            infinite_light
         } else {
             let record= new_record.unwrap();
-            record.prim_index == self.p1.prim_index
+            record.prim_index == self.p1.prim_index && !infinite_light
         }
         
     }
@@ -326,7 +326,7 @@ impl Mesh {
         if self.uv.len() == 0 {
             return [Vector2::new(0., 0.), Vector2::new(1., 0.), Vector2::new(1., 1.)];
         } else {
-            return [self.uv[ind], self.uv[ind + 1], self.uv[ind + 2]];
+            return [self.uv[self.ind[ind]], self.uv[self.ind[ind + 1]], self.uv[self.ind[ind + 2]]];
         }
     }
 

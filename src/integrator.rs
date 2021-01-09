@@ -23,7 +23,7 @@ pub enum IntType {
     Whitted { max_depth: u32 },
     Basic { max_depth: u32 },
     Direct { max_depth: u32, strategy: LightStrategy },
-    Path { max_depth: u32 }
+    Path { max_depth: u32, invisible_light: bool }
 }
 
 pub trait Integrator {
@@ -48,8 +48,8 @@ pub fn get_integrator<'a>(int_type: IntType, camera: Camera, sampler: Samplers) 
         IntType::Direct { max_depth, strategy } => {
             Box::new(DirectLightingIntegrator::make_direct_lighting(camera, sampler, max_depth, Vec::new(), strategy))
         }
-        IntType::Path { max_depth } => {
-            Box::new(PathIntegrator::make_path(camera, sampler, max_depth))
+        IntType::Path { max_depth, invisible_light } => {
+            Box::new(PathIntegrator::make_path(camera, invisible_light, sampler, max_depth))
         }
     }
 }
@@ -62,8 +62,8 @@ pub struct WhittedIntegrator {
 
 impl Integrator for WhittedIntegrator {
     fn render(&mut self, grid: &mut Vec<Vec<(f64, f64, f64, u32)>>, px: u32, py: u32) {
-        let x = px % TILE_WIDTH;
-        let y = py % TILE_HEIGHT;
+        let x = px % TILE_SIZE;
+        let y = py % TILE_SIZE;
         let seed = py * IMAGE_WIDTH + px;
         Samplers::start_pixel(&mut self.sampler, &Point2::new(px as i32, py as i32));
         loop {
@@ -107,7 +107,7 @@ impl SamplerIntegrator for WhittedIntegrator {
                 continue;
             }
             let f = record.bsdf.f_default(&wo, &wi);
-            if f != util::black() && vis.unoccluded() {
+            if f != util::black() && vis.unoccluded(light.is_infinite()) {
                 ans = ans + f.component_mul(&color) * wi.dot(&n).abs() / pdf;
             }
         }
@@ -133,8 +133,8 @@ pub struct BasicIntegrator {
 
 impl Integrator for BasicIntegrator {
     fn render(&mut self, grid: &mut Vec<Vec<(f64, f64, f64, u32)>>, px: u32, py: u32) {
-        let x = px % TILE_WIDTH;
-        let y = py % TILE_HEIGHT;
+        let x = px % TILE_SIZE;
+        let y = py % TILE_SIZE;
         // calculate the samples for the pixel
         for _ in 0..SAMPLES_PER_PIXEL {
             let u: f64 = (px as f64 + self.sampler.get_1d()) / ((IMAGE_WIDTH - 1) as f64);
@@ -165,8 +165,8 @@ struct DirectLightingIntegrator {
 
 impl Integrator for DirectLightingIntegrator {
     fn render(&mut self, grid: &mut Vec<Vec<(f64, f64, f64, u32)>>, px: u32, py: u32) {
-        let x = px % TILE_WIDTH;
-        let y = py % TILE_HEIGHT;
+        let x = px % TILE_SIZE;
+        let y = py % TILE_SIZE;
         let seed = py * IMAGE_WIDTH + px;
         Samplers::start_pixel(&mut self.sampler, &Point2::new(px as i32, py as i32));
         loop {
@@ -235,13 +235,14 @@ impl DirectLightingIntegrator {
 struct PathIntegrator {
     camera: Camera,
     sampler: Samplers,
-    max_depth: u32
+    max_depth: u32,
+    invisible_light: bool
 }
 
 impl Integrator for PathIntegrator {
     fn render(&mut self, grid: &mut Vec<Vec<(f64, f64, f64, u32)>>, px: u32, py: u32) {
-        let x = px % TILE_WIDTH;
-        let y = py % TILE_HEIGHT;
+        let x = px % TILE_SIZE;
+        let y = py % TILE_SIZE;
         let seed = py * IMAGE_WIDTH + px;
         Samplers::start_pixel(&mut self.sampler, &Point2::new(px as i32, py as i32));
         loop {
@@ -266,7 +267,7 @@ impl SamplerIntegrator for PathIntegrator {
     fn li(&mut self, mut ray: Ray, depth: u32) -> Vector3<f64> {
         // beta represents the weight of the path generated thus far:
         // prod_{j=1}^{i-2} \frac{f(p_{j+1}\to p_j\to p_{j+1})|\cos\theta_j|}{p_\omega(p_{j+1}-p_j)}
-        // l holds the radiance of the running total, specularBounce keeps track of it
+        // l holds the radiance of the running total, specularBounce keeps track of if
         // the last outgoing path sampled was specular
         let mut beta = util::white();
         let mut l = util::black();
@@ -274,11 +275,7 @@ impl SamplerIntegrator for PathIntegrator {
         let mut bounces = 0;
         let objs = get_objects();
         let lights = &objs.lights;
-        let inv_sqrt_three = 1f64 / 3f64.sqrt();
         loop {
-            // if bounces > 0 {
-            //  println!("{} after {} bounces", beta, bounces);
-            // }
             // find next vertex of current path
             let op_record = geometry::get_intersection(&ray);
             let is_some = op_record.is_some();
@@ -289,7 +286,14 @@ impl SamplerIntegrator for PathIntegrator {
             // the light on the previous vertex, so we must do so here
             if bounces == 0 || specular_bounce {
                 if is_some {
-                    l = l + record.le(&-ray.dir).component_mul(&beta);
+                    if objs.objs[record.prim_index].get_light_index() != std::usize::MAX {
+                        if self.invisible_light {
+                            ray = record.spawn_ray(&ray.dir); // go straight through light
+                            continue;
+                        } else {
+                            l = l + record.le(&-ray.dir).component_mul(&beta);
+                        }
+                    }                        
                 } else {
                     for light in lights {
                         l = l + light.le(&ray).component_mul(&beta);
@@ -317,7 +321,7 @@ impl SamplerIntegrator for PathIntegrator {
             
             // russian roulette for breaking
             if bounces > 3 {
-                let q = 0.05f64.max(1f64 - beta.magnitude() * inv_sqrt_three); // arbitrary
+                let q = 0.05f64.max(1f64 - beta.x.max(beta.y.max(beta.z)));
                 if self.sampler.get_1d() < q {
                     break;
                 }
@@ -330,8 +334,8 @@ impl SamplerIntegrator for PathIntegrator {
 }
 
 impl PathIntegrator {
-    pub fn make_path(camera: Camera, sampler: Samplers, max_depth: u32) -> Self {
-        Self { camera, sampler, max_depth }
+    pub fn make_path(camera: Camera, invisible_light: bool, sampler: Samplers, max_depth: u32) -> Self {
+        Self { camera, invisible_light, sampler, max_depth }
     }
 }
 
@@ -414,7 +418,7 @@ fn estimate_direct(record: &HitRecord, u_scatter: &Point2<f64>, light: &Light, u
         scattering_pdf = record.bsdf.pdf(&record.wo, &wi, bsdf_flags);
         if f != util::black() {
             // TODO: use handle_media
-            if !vis.unoccluded() {
+            if !vis.unoccluded(light.is_infinite()) {
                 color = util::black();
             }
             if color != util::black() {
@@ -443,7 +447,6 @@ fn estimate_direct(record: &HitRecord, u_scatter: &Point2<f64>, light: &Light, u
                 }
                 weight = power_heuristic(1, scattering_pdf, 1, light_pdf);
             }
-
             let new_ray = record.spawn_ray(&wi);
             let new_record = geometry::get_intersection(&new_ray);
             let mut color = util::black();

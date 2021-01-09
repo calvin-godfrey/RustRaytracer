@@ -86,8 +86,8 @@ impl MicrofacetDistribution {
     }
     fn get_visible_area(mfd: &MicrofacetDistribution) -> bool {
         match mfd {
-            MicrofacetDistribution::Beckmann { sample_visible_area, alpha_x, alpha_y } => {*sample_visible_area}
-            MicrofacetDistribution::TrowbridgeReitz { sample_visible_area, alpha_x, alpha_y } => {*sample_visible_area}
+            MicrofacetDistribution::Beckmann { sample_visible_area, .. } => {*sample_visible_area}
+            MicrofacetDistribution::TrowbridgeReitz { sample_visible_area, .. } => {*sample_visible_area}
             MicrofacetDistribution::Empty => {false}
         }
     }
@@ -285,10 +285,10 @@ fn trowbridge_reitz_sample_11(cos_theta: f64, u1: f64, u2: f64) -> Point2<f64> {
         return Point2::new(r * phi.cos(), r * phi.sin());
     }
 
-    let sin_theta = (0f64.max(1. - cos_theta * cos_theta)).sqrt();
+    let sin_theta = 0f64.max((1. - cos_theta * cos_theta).sqrt());
     let tan_theta = sin_theta / cos_theta;
     let a = 1. / tan_theta;
-    let g1 = 2. / (1. + (1. + 1. / (a * a)));
+    let g1 = 2. / (1. + (1. + 1. / (a * a)).sqrt());
 
     let a = 2. * u1 / g1 - 1.;
     let mut tmp = 1. / (a * a - 1.);

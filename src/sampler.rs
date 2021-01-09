@@ -278,7 +278,6 @@ impl PixelSampler {
     }
 
     pub fn get_2d(&mut self) -> Point2<f64> {
-        // println!("Current index: {}/{}", self.sampler.current_pixel_index, self.sampler.samples_per_pixel);
         assert!(self.sampler.current_pixel_index < self.sampler.samples_per_pixel);
         if (self.current_2d_dimension as usize) < self.samples_2d.len() {
             let ans = self.samples_2d.get(self.current_2d_dimension as usize).unwrap().get(self.sampler.current_pixel_index as usize).unwrap();
