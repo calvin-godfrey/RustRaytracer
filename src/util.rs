@@ -20,12 +20,7 @@ pub fn gradient(from: &Rgb<u8>, to: &Rgb<u8>, scale: f64) -> Rgb<u8> {
 
 #[allow(dead_code)]
 pub fn clamp(x: f64, min: f64, max: f64) -> f64 {
-    if x < min {
-        return min;
-    } else if x > max {
-        return max;
-    }
-    return x;
+    x.max(min).min(max)
 }
 
 pub fn rand() -> f64 {
@@ -162,6 +157,14 @@ pub fn spherical_phi(v: &Vector3<f64>) -> f64 {
 
 pub fn color_to_luminance(v: &Vector3<f64>) -> f64 {
     0.2126 * v.x + 0.7152 * v.y + 0.0722 * v.z
+}
+
+pub fn lerp(t: f64, min: f64, max: f64) -> f64 {
+    (1f64 - t) * min + t * max
+}
+
+pub fn lerp_v(t: f64, min: &Vector3<f64>, max: &Vector3<f64>) -> Vector3<f64> {
+    Vector3::new(lerp(t, min.x, max.x), lerp(t, min.y, max.y), lerp(t, min.z, max.z))
 }
 
 pub fn hable(x: f64) -> f64 {

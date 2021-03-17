@@ -170,6 +170,12 @@ pub fn cast_ray(ray: &Ray, depth: u32) -> Vector3<f64> {
             let ans = incoming.component_mul(&color.scale(1f64 / pdf)).scale(ray.dir.dot(&record.shading.n).abs());
             ans
         }
-        None => if AMBIENT_LIGHT { util::get_sky(ray) } else { util::get_background(ray) }
+        None => {
+            let mut l = util::black();
+            for light in &objs.lights {
+                l = l + light.le(ray) / (4f64 * PI);
+            }
+            l
+        }
     }    
 }

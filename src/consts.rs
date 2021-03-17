@@ -1,12 +1,12 @@
 #![allow(dead_code)]
 // Defining rendering quantities
 pub const GAMMA: f64 = 2.2;
-pub const IMAGE_WIDTH: u32 = 1920;
-pub const ASPECT_RATIO: f64 = 16.0 / 9.0;
-pub const SAMPLES_PER_PIXEL: u32 = 750;
+pub const IMAGE_WIDTH: u32 = 720;
+pub const ASPECT_RATIO: f64 = 9.0 / 9.0;
+pub const SAMPLES_PER_PIXEL: u32 = 1;
 pub const MAX_DEPTH: u32 = 25;
 pub const NUM_THREADS: u32 = 6;
-pub const AMBIENT_LIGHT: bool = false;
+pub const AMBIENT_LIGHT: bool = true;
 pub const TILE_SIZE: u32 = 16;
 pub const UPDATE_PICTURE_FREQUENCY: u64 = 5;
 pub const TONE_MAPPING: bool = true;

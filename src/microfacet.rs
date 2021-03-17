@@ -8,6 +8,7 @@ use crate::util;
 pub enum MicrofacetDistribution {
     Beckmann {sample_visible_area: bool, alpha_x: f64, alpha_y: f64},
     TrowbridgeReitz { sample_visible_area: bool, alpha_x: f64, alpha_y: f64 },
+    DisneyMicrofacet { sample_visible_area: bool, alpha_x: f64, alpha_y: f64 },
     Empty
 }
 
@@ -28,6 +29,16 @@ impl MicrofacetDistribution {
                 (-tan_sq_theta * (bxdf::cos_sq_phi(wh) / (alpha_x * alpha_x) + bxdf::sin_sq_phi(wh) / (alpha_y * alpha_y))).exp() / (PI * alpha_x * alpha_y * cos4_theta)
             }
             MicrofacetDistribution::TrowbridgeReitz { sample_visible_area, alpha_x, alpha_y } => {
+                let tan_sq_theta = bxdf::tan_sq_theta(wh);
+                if tan_sq_theta == std::f64::INFINITY {
+                    return 0.;
+                }
+                let cos4_theta = bxdf::cos_sq_theta(wh) * bxdf::cos_sq_theta(wh);
+                let e = (bxdf::cos_sq_phi(wh) / (alpha_x * alpha_x) + bxdf::sin_sq_phi(wh) / ( alpha_y * alpha_y)) * tan_sq_theta;
+                // 1 / (\pi \alpha_x \alpha_y\cos^4\theta_h(1 + \tan^2\theta_h(\cos^2\phi_h/\alpha_x^2+\sin^2\phi_h/\alpha_y^2))^2)
+                1f64 / (PI * alpha_x * alpha_y * cos4_theta * (1. + e) * (1. + e))
+            }
+            MicrofacetDistribution::DisneyMicrofacet { sample_visible_area, alpha_x, alpha_y } => {
                 let tan_sq_theta = bxdf::tan_sq_theta(wh);
                 if tan_sq_theta == std::f64::INFINITY {
                     return 0.;
@@ -64,13 +75,28 @@ impl MicrofacetDistribution {
                 let alpha2_ta2_theta = (alpha * abs_tan_theta) * (alpha * abs_tan_theta);
                 (-1f64 + (1f64 + alpha2_ta2_theta).sqrt()) / 2f64
             }
+            MicrofacetDistribution::DisneyMicrofacet { sample_visible_area, alpha_x, alpha_y } => {
+                let abs_tan_theta = bxdf::tan_theta(w).abs();
+                if abs_tan_theta == std::f64::INFINITY {
+                    return 0.;
+                }
+                let alpha = (bxdf::cos_sq_phi(w) * alpha_x * alpha_x + bxdf::sin_sq_phi(w) * alpha_y * alpha_y).sqrt();
+                let alpha2_ta2_theta = (alpha * abs_tan_theta) * (alpha * abs_tan_theta);
+                (-1f64 + (1f64 + alpha2_ta2_theta).sqrt()) / 2f64
+            }
             MicrofacetDistribution::Empty => {0.}
         }
     }
 
     pub fn g1(mfd: &MicrofacetDistribution, w: &Vector3<f64>) -> f64 { 1. / (1. + MicrofacetDistribution::lambda(mfd, w)) }
     pub fn g(mfd: &MicrofacetDistribution, wo: &Vector3<f64>, wi: &Vector3<f64>) -> f64 {
-        1. / (1. + MicrofacetDistribution::lambda(mfd, wo) + MicrofacetDistribution::lambda(mfd, wi))
+        match mfd {
+            MicrofacetDistribution::DisneyMicrofacet { .. } => {
+                MicrofacetDistribution::g1(mfd, wo) * MicrofacetDistribution::g1(mfd, wi)
+            }
+            _ => { 1. / (1. + MicrofacetDistribution::lambda(mfd, wo) + MicrofacetDistribution::lambda(mfd, wi)) }
+        }
+        
     }
 
     pub fn pdf(mfd: &MicrofacetDistribution, wo: &Vector3<f64>, wh: &Vector3<f64>) -> f64 {
@@ -88,6 +114,7 @@ impl MicrofacetDistribution {
         match mfd {
             MicrofacetDistribution::Beckmann { sample_visible_area, .. } => {*sample_visible_area}
             MicrofacetDistribution::TrowbridgeReitz { sample_visible_area, .. } => {*sample_visible_area}
+            MicrofacetDistribution::DisneyMicrofacet { sample_visible_area, .. } => {*sample_visible_area}
             MicrofacetDistribution::Empty => {false}
         }
     }
@@ -164,6 +191,40 @@ impl MicrofacetDistribution {
                     if flip { -wh } else { wh }
                 }
             }
+            MicrofacetDistribution::DisneyMicrofacet { sample_visible_area, alpha_x, alpha_y } => {
+                return if !sample_visible_area {
+                    let cos_theta: f64;
+                    let mut phi = 2.0 * PI * u[1];
+                    if alpha_x == alpha_y {
+                        let tan_theta2 = alpha_x * alpha_x * u[0] / (1. - u[0]);
+                        cos_theta = 1. / ((1. + tan_theta2).sqrt());
+                    } else {
+                        phi = (alpha_y / alpha_x * (2. * PI * u[1] + 0.5 * PI).tan()).atan();
+                        if u[1] > 0.5 {
+                            phi += PI;
+                        }
+                        let sin_phi = phi.sin();
+                        let cos_phi = phi.cos();
+                        let alphax2 = alpha_x * alpha_x;
+                        let alphay2 = alpha_y * alpha_y;
+                        let alpha2 = 1.0 / (cos_phi * cos_phi / alphax2 + sin_phi * sin_phi / alphay2);
+                        let tan_theta2 = alpha2 * u[0] / (1. - u[0]);
+
+                        cos_theta = 1. / (1. + tan_theta2).sqrt();
+                    }
+                    let sin_theta = (0f64.max(1. - cos_theta * cos_theta)).sqrt();
+                    let mut wh = util::make_spherical(sin_theta, cos_theta, phi);
+                    if !util::same_hemisphere(wo, &wh) {
+                        wh = -wh;
+                    }
+                    Unit::new_normalize(wh)
+                } else {
+                    let flip = wo.z < 0.;
+                    let flipped_wo = if flip { -wo } else { *wo };
+                    let wh = trowbridge_reitz_sample(&flipped_wo, *alpha_x, *alpha_y, u[0], u[1]);
+                    if flip { -wh } else { wh }
+                }
+            }
             MicrofacetDistribution::Empty => { Unit::new_normalize(util::black()) }
         }
     }
@@ -178,6 +239,12 @@ impl MicrofacetDistribution {
         let x = alpha_x.max(1e-3);
         let y = alpha_y.max(1e-3);
         MicrofacetDistribution::TrowbridgeReitz { sample_visible_area: samplevis, alpha_x: x, alpha_y: y }
+    }
+
+    pub fn make_disney(alpha_x: f64, alpha_y: f64) -> Self {
+        let x = alpha_x.max(1e-3);
+        let y = alpha_y.max(1e-3);
+        MicrofacetDistribution::DisneyMicrofacet { sample_visible_area: true, alpha_x: x, alpha_y: y }
     }
 }
 

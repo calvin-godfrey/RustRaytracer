@@ -10,7 +10,7 @@ pub mod materials {
     use crate::perlin;
     use crate::microfacet::{trowbridge_reitz_roughness_to_alpha, MicrofacetDistribution};
     use crate::bsdf::Bsdf;
-    use crate::bxdf::{Fresnel, Bxdf};
+    use crate::bxdf::{Fresnel, Bxdf, eta_to_r0};
     use crate::geometry::get_objects;
     use crate::consts::*;
 
@@ -20,7 +20,23 @@ pub mod materials {
         Plastic { k_d_id: usize, k_s_id: usize, bump_id: usize, roughness: f64, remap_roughness: bool },
         Glass {k_r_id: usize, k_t_id: usize, u_roughness: f64, v_roughness: f64, index: f64, bump_id: usize, remap_roughness: bool },
         Metal {eta_id: usize, k_id: usize, rough_id: usize, urough_id: usize, vrough_id: usize, bump_id: usize, remap_roughness: bool },
-        Mirror {color_id: usize, bump_id: usize}
+        Mirror {color_id: usize, bump_id: usize},
+        Disney { c_id: usize,
+                 metallic_id: usize,
+                 eta_id: usize,
+                 roughness_id: usize,
+                 spec_tint_id: usize,
+                 anisotropic_id: usize,
+                 sheen_id: usize,
+                 sheen_tint_id: usize,
+                 clearcoat_id: usize,
+                 clearcoat_gloss_id: usize,
+                 spec_trans_id: usize,
+                 scatter_distance_id: usize,
+                 thin: bool,
+                 flatness_id: usize,
+                 diff_trans_id: usize,
+                 bump_id: usize }
     }
     
     impl Material {
@@ -142,6 +158,87 @@ pub mod materials {
                         record.bsdf.add(Bxdf::make_specular_reflection(color, Fresnel::FresnelNoOp));
                     }
                 }
+                Material::Disney { c_id, metallic_id, eta_id, roughness_id, spec_tint_id, anisotropic_id, sheen_id, sheen_tint_id, clearcoat_id, clearcoat_gloss_id, spec_trans_id, scatter_distance_id, thin, flatness_id, diff_trans_id, bump_id } => {
+                    let u = record.uv.x;
+                    let v = record.uv.y;
+                    let p = &record.p;
+                    let color = Texture::value(*c_id, u, v, p);
+                    let metallic_weight = Texture::value(*metallic_id, u, v, p).x;
+                    let e = Texture::value(*eta_id, u, v, p).x;
+                    let strans = Texture::value(*spec_trans_id, u, v, p).x;
+                    let diffuse_weight = (1f64 - metallic_weight) * (1f64 - strans);
+                    // 0 means all diffuse is reflected, 1 means all is transmitted
+                    let dt = Texture::value(*diff_trans_id, u, v, p).x / 2f64;
+                    let rough = Texture::value(*roughness_id, u, v, p).x;
+                    let lum = util::color_to_luminance(&color);
+                    // normalize color
+                    let c_tint: Vector3<f64> = if lum > 0f64 { 1f64 / lum * color } else { util::white() };
+                    let sheen_weight = Texture::value(*sheen_id, u, v, p).x;
+                    let mut c_sheen = util::black();
+                    if sheen_weight > 0f64 {
+                        let sheen_tint = Texture::value(*sheen_tint_id, u, v, p).x;
+                        c_sheen = util::lerp_v(sheen_tint, &util::white(), &c_tint);
+                    }
+
+                    if diffuse_weight > 0f64 {
+                        if *thin {
+                            let flat = Texture::value(*flatness_id, u, v, p).x;
+                            // blend between diffuse and fake susurface; weight using dt
+                            record.bsdf.add(Bxdf::make_disney_diffuse(diffuse_weight * (1f64 - flat) * (1f64 - dt) * color));
+                            record.bsdf.add(Bxdf::make_disney_fake_ss(diffuse_weight * flat * (1f64 - dt) * color, rough));
+                        } else {
+                            let sd = Texture::value(*scatter_distance_id, u, v, p);
+                            if sd == util::black() { // no subsurface scattering
+                                record.bsdf.add(Bxdf::make_disney_diffuse(diffuse_weight * color));
+                            } else {
+                                // use bssrdf instead; right now, that doesn't exist, so just specular transmission (?) TODO:
+                                record.bsdf.add(Bxdf::make_specular_transmission(util::white(), 1f64, e, mode))
+                            }
+                        }
+                        // add retro-reflection
+                        record.bsdf.add(Bxdf::make_disney_retro(diffuse_weight * color, rough));
+                        
+                        // and sheen (if necessary)
+                        if sheen_weight > 0f64 {
+                            record.bsdf.add(Bxdf::make_disney_sheen(diffuse_weight * sheen_weight * c_sheen));
+                        }
+                    }
+
+                    // now do microfacet transmission/reflection
+                    let ani = Texture::value(*anisotropic_id, u, v, p).x;
+                    let aspect = (1f64 - ani * 0.9).sqrt(); // TODO: why 0.9?
+                    let ax = 0.001f64.max(rough * rough / aspect);
+                    let ay = 0.001f64.max(rough * rough * aspect);
+                    let dist = MicrofacetDistribution::make_disney(ax, ay);
+                    let spec_tint = Texture::value(*spec_tint_id, u, v, p).x;
+                    let c_spec_0 = util::lerp_v(metallic_weight, &(eta_to_r0(e) * util::lerp_v(spec_tint, &util::white(), &c_tint)), &color);
+                    let fresnel = Fresnel::DisneyFresnel { r0: c_spec_0, metallic: metallic_weight, eta: e };
+                    record.bsdf.add(Bxdf::make_microfacet_reflection(util::white(), fresnel, dist));
+
+                    // clearcoat
+                    let cc = Texture::value(*clearcoat_id, u, v, p).x;
+                    if cc > 0f64 {
+                        let gloss = Texture::value(*clearcoat_gloss_id, u, v, p).x;
+                        record.bsdf.add(Bxdf::make_disney_clearcoat(cc, util::lerp(gloss, 0.1, 0.001)));
+                    }
+
+                    // transmission
+                    if strans > 0f64 {
+                        let t = Vector3::new(strans * color.x.sqrt(), strans * color.y.sqrt(), strans * color.z.sqrt());
+                        if *thin { // approximate with scaled distribution
+                            let rscaled = (0.65 * e - 0.35) * rough; // from Burley 2015
+                            let ax = 0.001f64.max(rscaled * rscaled / aspect);
+                            let ay = 0.001f64.max(rscaled * rscaled * aspect);
+                            let scaled_dist = MicrofacetDistribution::make_trowbridge_reitz(ax, ay, true);
+                            record.bsdf.add(Bxdf::make_microfacet_transmission(t, scaled_dist, 1f64, e, mode));
+                        } else {
+                            record.bsdf.add(Bxdf::make_microfacet_transmission(t, dist, 1f64, e, mode));
+                        }
+                    }
+                    if *thin {
+                        record.bsdf.add(Bxdf::make_lambertian_transmission(dt * color));
+                    }
+                }
             }
         }
     
@@ -170,6 +267,32 @@ pub mod materials {
 
         pub fn make_mirror(color_id: usize, bump_id: usize) -> Self {
             Material::Mirror {color_id, bump_id}
+        }
+
+        /**
+        All of the parameters should have the texture value in the x coordinate
+        except for c_id and scatter_distance_id
+        */
+        pub fn make_disney(c_id: usize,
+            metallic_id: usize,
+            eta_id: usize,
+            roughness_id: usize,
+            spec_tint_id: usize,
+            anisotropic_id: usize,
+            sheen_id: usize,
+            sheen_tint_id: usize,
+            clearcoat_id: usize,
+            clearcoat_gloss_id: usize,
+            spec_trans_id: usize,
+            scatter_distance_id: usize,
+            thin: bool,
+            flatness_id: usize,
+            diff_trans_id: usize,
+            bump_id: usize) -> Self {
+        
+            Material::Disney {c_id, metallic_id, eta_id, roughness_id, spec_tint_id, anisotropic_id,
+                              sheen_id, sheen_tint_id, clearcoat_id, clearcoat_gloss_id, spec_trans_id,
+                              scatter_distance_id, thin, flatness_id, diff_trans_id, bump_id}
         }
     }
 
@@ -282,33 +405,12 @@ pub mod materials {
             Texture::Perlin { perlin }
         }
         pub fn new_hdr(path: &str) -> Self {
-            let file = File::open(path);
-            match file {
-                Ok(f) => {
-                    let f = BufReader::new(f);
-                    let decoder = image::hdr::HdrDecoder::new(f);
-                    match decoder {
-                        Ok(d) => {
-                            let meta = d.metadata();
-                            let data = d.read_image_hdr();
-                            match data {
-                                Ok(good_data) => {
-                                    return Texture::Hdr { meta, data: good_data }
-                                }
-                                Err(_) => {
-                                    panic!("Failure to decode data from hdr {}", path);
-                                }
-                            }
-                        }
-                        Err(_) => {
-                            panic!("Failure decoding hdr {}", path);
-                        }
-                    }
-                }
-                Err(_) => {
-                    panic!("Unable to open file {}", path);
-                }
-            }
+            let file = File::open(path).expect(&format!("Unable to open file {}", path));
+            let f = BufReader::new(file);
+            let decoder = image::hdr::HdrDecoder::new(f).expect(&format!("Failure decoding hdr {}", path));
+            let meta = decoder.metadata();
+            let data = decoder.read_image_hdr().expect(&format!("Failure to decode data from hdr {}", path));
+            Texture::Hdr { meta, data }
         }
     }
 }

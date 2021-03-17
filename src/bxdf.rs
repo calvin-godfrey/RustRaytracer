@@ -40,6 +40,37 @@ fn schlick_fresnel(r_s: &Vector3<f64>, cos_theta: f64) -> Vector3<f64> {
     r_s.component_mul(&(util::white() - r_s).scale((1. - cos_theta).powf(5.)))
 }
 
+fn schlick_weight(u: f64) -> f64 {
+    let m = util::clamp(1f64 - u, 0f64, 1f64);
+    let m2 = m * m;
+    m2 * m2 * m
+}
+
+fn fr_schlick(r0: &Vector3<f64>, cos_theta: f64) -> Vector3<f64> {
+    let weight = schlick_weight(cos_theta);
+    // linearly interpolate
+    // util::lerp_v(weight, r0, &util::white())
+    r0 + weight * (util::white() - r0)
+}
+
+fn gtr1(cos_theta: f64, a: f64) -> f64 {
+    if cos_theta > 1f64 {
+        INV_PI
+    } else {
+        let a2 = a * a;
+        (a2 - 1f64) / (PI * a2.ln() * (1f64 + (a2 - 1f64) * cos_theta * cos_theta))
+    }
+}
+
+fn smithg_ggx(cos_theta: f64, alpha: f64) -> f64 {
+    let a2 = alpha * alpha;
+    let cos_theta_2 = cos_theta * cos_theta;
+    // 1f64 / (cos_theta + (a2 + cos_theta_2 - a2 * cos_theta_2).sqrt())
+    2f64 / (1f64 + (a2 + (1f64 - a2) * cos_theta_2).sqrt())
+}
+
+pub fn eta_to_r0(eta: f64) -> f64 { (eta - 1f64) * (eta - 1f64) / ((eta + 1f64) * (eta + 1f64)) }
+
 /** Calculates the fraction of light that is reflected or transmitted
 based on the cosine of the angle between the incoming light and surface normal
 and the two indices of refraction. Assumes that eta_i is the index of the incident material,
@@ -73,20 +104,6 @@ pub fn fr_dielectric(cos_theta_i: f64, eta_i: f64, eta_t: f64) -> f64 {
 // spectral path tracing because it is wavelength dependent.
 
 pub fn fr_conductor(cos_theta_i: f64, eta: &Vector3<f64>, eta_k: &Vector3<f64>) -> Vector3<f64> {
-    // let cos_theta_i = util::clamp(cos_theta_i, -1., 1.);
-    
-    // let cos_theta_i2 = cos_theta_i * cos_theta_i;
-
-    // let eta_lens2 = eta.component_mul(eta) + eta_k.component_mul(eta_k);
-    // let eta_cos_2: Vector3<f64> = eta.scale(cos_theta_i * 2.);
-
-    // let rs_common: Vector3<f64> = eta_lens2 + Vector3::new(cos_theta_i2, cos_theta_i2, cos_theta_i2);
-    // let rs2 = (rs_common - eta_cos_2).component_div(&(rs_common + eta_cos_2));
-
-    // let rp_common = eta_lens2 * cos_theta_i2 + util::white();
-    // let rp2 = (rp_common - eta_cos_2).component_div(&(rp_common + eta_cos_2));
-
-    // (rs2 + rp2).scale(0.5)
     let cos_theta_i = util::clamp(cos_theta_i, -1., 1.);
     let cos_theta_i2 = cos_theta_i * cos_theta_i;
     let sin_theta_i2 = 1f64 - cos_theta_i2;
@@ -112,6 +129,7 @@ pub fn fr_conductor(cos_theta_i: f64, eta: &Vector3<f64>, eta_k: &Vector3<f64>) 
 pub enum Fresnel {
     FresnelDielectric {eta_i: f64, eta_t: f64},
     FresnelConductor { eta: Vector3<f64>, k: Vector3<f64> },
+    DisneyFresnel { r0: Vector3<f64>, metallic: f64, eta: f64 },
     FresnelNoOp // not physically possible, but convenient to have
 }
 
@@ -126,6 +144,12 @@ impl Fresnel {
             Fresnel::FresnelConductor { eta, k } => {
                 fr_conductor(cos_theta_i.abs(), &eta, k)
             }
+            Fresnel::DisneyFresnel { r0, metallic, eta } => {
+                let min = fr_dielectric(cos_theta_i, 1f64, *eta);
+                let max = fr_schlick(r0, cos_theta_i);
+                let ans = Vector3::new(util::lerp(*metallic, min, max.x), util::lerp(*metallic, min, max.y), util::lerp(*metallic, min, max.z));
+                ans
+            }
         }
     }
 }
@@ -137,11 +161,18 @@ pub enum Bxdf {
     SpecularTransmission { color: Vector3<f64>, eta_a: f64, eta_b: f64, fresnel: Fresnel, mode: u8, bxdf_type: u8 },
     // TODO: Add fresnel specular
     LambertianReflection { color: Vector3<f64>, bxdf_type: u8 },
+    LambertianTransmission { color: Vector3<f64>, bxdf_type: u8 },
     OrenNayer { color: Vector3<f64>, a: f64, b: f64, bxdf_type: u8 },
     MicrofacetReflection { color: Vector3<f64>, fresnel: Fresnel, mfd: MicrofacetDistribution, bxdf_type: u8 },
     MicrofacetTransmission {  color: Vector3<f64>, fresnel: Fresnel, mfd: MicrofacetDistribution, eta_a: f64, eta_b: f64, mode: u8, bxdf_type: u8 },
     FresnelBlend { r_s: Vector3<f64>, r_d: Vector3<f64>, mfd: MicrofacetDistribution, bxdf_type: u8 },
-    FresnelSpecular { r: Vector3<f64>, t: Vector3<f64>, eta_a: f64, eta_b: f64, mode: u8, bxdf_type: u8 }
+    FresnelSpecular { r: Vector3<f64>, t: Vector3<f64>, eta_a: f64, eta_b: f64, mode: u8, bxdf_type: u8 },
+    // and here comes all the disney stuff for the disney brdf
+    DisneyDiffuse { color: Vector3<f64>, bxdf_type: u8 },
+    DisneyFakeSS { color: Vector3<f64>, roughness: f64, bxdf_type: u8 },
+    DisneyRetro { color: Vector3<f64>, roughness: f64, bxdf_type: u8 },
+    DisneySheen { color: Vector3<f64>, bxdf_type: u8 },
+    DisneyClearCoat { weight: f64, gloss: f64, bxdf_type: u8 },
 }
 
 #[allow(unused_variables)]
@@ -152,11 +183,17 @@ impl Bxdf {
             Bxdf::SpecularReflection { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
             Bxdf::SpecularTransmission { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
             Bxdf::LambertianReflection { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
+            Bxdf::LambertianTransmission { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
             Bxdf::OrenNayer { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
             Bxdf::MicrofacetReflection { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
             Bxdf::MicrofacetTransmission { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
             Bxdf::FresnelBlend { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
             Bxdf::FresnelSpecular {bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
+            Bxdf::DisneyDiffuse { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
+            Bxdf::DisneyFakeSS { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
+            Bxdf::DisneyRetro { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
+            Bxdf::DisneySheen { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
+            Bxdf::DisneyClearCoat { bxdf_type, .. } => {matches_flags(*bxdf_type, flag)}
         }
     }
 
@@ -168,9 +205,10 @@ impl Bxdf {
         match bxdf {
             Bxdf::ScaledBxdf { inner, scale } => {Bxdf::f(inner.as_ref(), wo, wi).component_mul(scale)}
             // for arbitrary pair of directions, there will be no specular reflection (excluding the infinitesimal chance that the direction is right)
-            Bxdf::SpecularReflection { color, fresnel, bxdf_type } => { util::black() }
-            Bxdf::SpecularTransmission { color, eta_a, eta_b, fresnel, mode, bxdf_type } => {util::black()}
-            Bxdf::LambertianReflection { color, bxdf_type } => { *color * INV_PI }
+            Bxdf::SpecularReflection { .. } => { util::black() }
+            Bxdf::SpecularTransmission { .. } => {util::black()}
+            Bxdf::LambertianReflection { color, .. } => { *color * INV_PI }
+            Bxdf::LambertianTransmission { color, .. } => { *color * INV_PI }
             Bxdf::OrenNayer { color, a, b, bxdf_type } => {
                 let sin_theta_i = sin_theta(wi);
                 let sin_theta_o = sin_theta(wo);
@@ -208,7 +246,8 @@ impl Bxdf {
                 // ensure wh is in the same hemisphere with faceforward
                 let f = Fresnel::evaluate(&fresnel, wi.dot(&util::face_forward(wh, &Vector3::new(0f64, 0f64, 1f64))));
                 let comp1: Vector3<f64> = color * MicrofacetDistribution::d(&mfd, &wh) * MicrofacetDistribution::g(&mfd, wo, wi);
-                comp1.component_mul(&f.scale(1f64 / (4f64 * cos_theta_i * cos_theta_o)))
+                let ans = comp1.component_mul(&f.scale(1f64 / (4f64 * cos_theta_i * cos_theta_o)));
+                ans
             }
             Bxdf::MicrofacetTransmission { color, fresnel, mfd, eta_a, eta_b, mode, bxdf_type } => {
                 if util::same_hemisphere(wo, wi) { // no transmission is possible
@@ -246,7 +285,63 @@ impl Bxdf {
                 let specular = MicrofacetDistribution::d(&mfd, &wh) / (4. * wi.dot(&wh).abs() * abs_cos_theta(wi).max(abs_cos_theta(wo))) * schlick_fresnel(r_s, wi.dot(&wh));
                 diffuse + specular
             }
-            Bxdf::FresnelSpecular { r, t, eta_a, eta_b, mode, bxdf_type } => {util::black()}
+            Bxdf::FresnelSpecular { .. } => {util::black()}
+            Bxdf::DisneyDiffuse { color, .. } => {
+                let fo = schlick_weight(abs_cos_theta(wo));
+                let fi = schlick_weight(abs_cos_theta(wi));
+                // formula from Burley 2015
+                INV_PI * (1f64 - fo / 2f64) * (1f64 - fi / 2f64) * color
+            }
+            Bxdf::DisneyFakeSS { color, roughness, .. } => {
+                let wh = wi + wo;
+                if wh == util::black() {
+                    return util::black();
+                }
+                let wh = Unit::new_normalize(wh);
+                let cos_theta_d = wi.dot(&wh);
+
+                let fss90 = cos_theta_d * cos_theta_d * roughness;
+                let fo = schlick_weight(abs_cos_theta(wo));
+                let fi = schlick_weight(abs_cos_theta(wi));
+                let fss = util::lerp(fo, 1f64, fss90) * util::lerp(fi, 1f64, fss90);
+                let ss = 1.25 * (fss * (1f64 / (abs_cos_theta(wo) + abs_cos_theta(wi)) - 0.5) + 0.5);
+                INV_PI * ss * color
+            }
+            Bxdf::DisneyRetro { color, roughness, .. } => {
+                let wh = wi + wo;
+                if wh == util::black() {
+                    return util::black()
+                }
+                let wh = Unit::new_normalize(wh);
+                let cos_theta_d = wi.dot(&wh);
+                let fo = schlick_weight(abs_cos_theta(wo));
+                let fi = schlick_weight(abs_cos_theta(wi));
+                let rr = 2f64 * roughness * cos_theta_d * cos_theta_d;
+                // formula from Burley 2015
+                INV_PI * rr * (fo + fi + fo * fi * (rr - 1f64)) * color
+            }
+            Bxdf::DisneySheen { color, .. } => {
+                let wh = wi + wo;
+                if wh == util::black() {
+                    return util::black()
+                }
+                let wh = Unit::new_normalize(wh);
+                let cos_theta_d = wi.dot(&wh);
+                schlick_weight(cos_theta_d) * color
+            }
+            Bxdf::DisneyClearCoat { weight, gloss, .. } => {
+                let wh = wi + wo;
+                if wh == util::black() {
+                    return util::black()
+                }
+                let wh = Unit::new_normalize(wh);
+                // assumes IOR = 1.5 so that R0 = 0.04, saves call to eta_to_r0
+                let dr = gtr1(abs_cos_theta(&wh), *gloss);
+                let fr = fr_schlick(&util::white().scale(0.04), wo.dot(&wh));
+                let gr = smithg_ggx(abs_cos_theta(wo), 0.25) * smithg_ggx(abs_cos_theta(wi), 0.25);
+
+               weight / 4f64 * gr * dr * fr // return gray color
+            }
         }
     }
 
@@ -254,7 +349,6 @@ impl Bxdf {
     color, vector, pdf
     */
     pub fn sample_f(bxdf: &Bxdf, wo: &Vector3<f64>, sample: &Point2<f64>, sample_type: u8) -> (Vector3<f64>, Vector3<f64>, f64) {
-        // TODO: What is sample type?
         match bxdf {
             Bxdf::ScaledBxdf { inner, scale } => {
                 let (color, wi, pdf) = Bxdf::sample_f(inner.as_ref(), wo, sample, sample_type);
@@ -284,8 +378,8 @@ impl Bxdf {
                     None => {(util::black(), Vector3::new(0., 0., 0.), 0.)} // TODO: change this?
                 }
             }
-            Bxdf::LambertianReflection { color, bxdf_type } => {Bxdf::default_sample_f(bxdf, wo, sample, sample_type)}
-            Bxdf::OrenNayer { color, a, b, bxdf_type } => {Bxdf::default_sample_f(bxdf, wo, sample, sample_type)}
+            Bxdf::LambertianReflection { .. } => {Bxdf::default_sample_f(bxdf, wo, sample, sample_type)}
+            Bxdf::OrenNayer { .. } => {Bxdf::default_sample_f(bxdf, wo, sample, sample_type)}
             Bxdf::MicrofacetReflection { color, fresnel, mfd, bxdf_type } => {
                 // Bxdf::default_sample_f(bxdf, wo, sample, sample_type)
                 if wo.z == 0. { return (util::black(), util::black(), 0.); }
@@ -311,7 +405,7 @@ impl Bxdf {
                     None => {(util::black(), util::black(), 0.)}
                 }
             }
-            Bxdf::FresnelBlend { r_s, r_d, mfd, bxdf_type } => {Bxdf::default_sample_f(bxdf, wo, sample, sample_type)}
+            Bxdf::FresnelBlend { .. } => {Bxdf::default_sample_f(bxdf, wo, sample, sample_type)}
             Bxdf::FresnelSpecular { r, t, eta_a, eta_b, mode, bxdf_type } => {
                 let f = fr_dielectric(cos_theta(wo) / wo.magnitude(), *eta_a, *eta_b);
                 if sample[0] < f {
@@ -344,118 +438,61 @@ impl Bxdf {
                     }
                 }
             }
-        }
-    }
-
-    /** Calculates the integral over the hemisphere around the normal of
-    f_r(p, w_o, w_i) |cos theta_i| d w_i, which is the total reflection leaving
-    in the direction wo from constant illumination. In other words, it evaluates
-    Bxdf::f() based on the given samples and then estimates the integral using
-    Monte Carlo methods
-    */
-    pub fn rho_p(bxdf: &Bxdf, wo: &Vector3<f64>, samples: &Vec<Point2<f64>>) -> Vector3<f64> {
-        match bxdf {
-            Bxdf::ScaledBxdf { inner, scale } => {
-                // no scaling necessary because rho_p calls f() and sample_f, which does
-                // the scaling
-                Bxdf::rho_p(inner.as_ref(), wo, samples)
+            Bxdf::DisneyDiffuse { .. } => { Bxdf::default_sample_f(bxdf, wo, sample, sample_type) }
+            Bxdf::DisneyFakeSS { .. } => { Bxdf::default_sample_f(bxdf, wo, sample, sample_type) }
+            Bxdf::DisneyRetro { .. } => { Bxdf::default_sample_f(bxdf, wo, sample, sample_type) }
+            Bxdf::DisneySheen { .. } => { Bxdf::default_sample_f(bxdf, wo, sample, sample_type) }
+            Bxdf::DisneyClearCoat { gloss, .. } => {
+                if wo.z == 0f64 {
+                    return (util::black(), util::black(), 0f64)
+                }
+                let alpha2 = gloss * gloss;
+                let cos_theta = 0f64.max((1f64 - alpha2.powf(1f64 - sample[0])) / (1f64 - alpha2)).sqrt();
+                let sin_theta = 0f64.max(1f64 - cos_theta * cos_theta).sqrt();
+                let phi = 2f64 * PI * sample[1];
+                let mut wh = util::make_spherical(sin_theta, cos_theta, phi);
+                if !util::same_hemisphere(wo, &wh) {
+                    wh = -wh;
+                }
+                let wi = util::reflect(wo, &Unit::new_normalize(wh));
+                if !util::same_hemisphere(wo, &wi) {
+                    return (util::black(), util::black(), 0f64)
+                }
+                (Bxdf::f(bxdf, wo, &wi), wi, Bxdf::pdf(bxdf, wo, &wi))
             }
-            Bxdf::SpecularReflection { color, fresnel, bxdf_type } => {
-                println!("Error: Calling unimplemented function on line {} in {}.", line!(), file!());
-                util::black()
-            }
-            Bxdf::SpecularTransmission { color, eta_a, eta_b, fresnel, mode, bxdf_type } => {
-                println!("Error: Calling unimplemented function on line {} in {}.", line!(), file!());
-                util::black()
-            }
-            Bxdf::LambertianReflection { color, bxdf_type } => {*color}
-            Bxdf::OrenNayer { color, a, b, bxdf_type } => {
-                println!("Error: Calling unimplemented function on line {} in {}.", line!(), file!());
-                util::black()
-            }
-            Bxdf::MicrofacetReflection { color, fresnel, mfd, bxdf_type } => {
-                println!("Error: Calling unimplemented function on line {} in {}.", line!(), file!());
-                util::black()
-            }
-            Bxdf::MicrofacetTransmission { color, fresnel, mfd, eta_a, eta_b, mode, bxdf_type } => {
-                println!("Error: Calling unimplemented function on line {} in {}.", line!(), file!());
-                util::black()
-            }
-            Bxdf::FresnelBlend { r_s, r_d, mfd, bxdf_type } => {
-                println!("Error: Calling unimplemented function on line {} in {}.", line!(), file!());
-                util::black()
-            }
-            Bxdf::FresnelSpecular { r, t, eta_a, eta_b, mode, bxdf_type } => {
-                println!("Error: Calling unimplemented function on line {} in {}.", line!(), file!());
-                util::black()
-            }
-        }
-    }
-
-    /** Calculates the samething as rho_p, but integrating over all possible incoming and outgoing
-    directions.
-    */
-    pub fn rho(bxdf: &Bxdf, samples1: &Vec<Point2<f64>>, samples2: &Vec<Point2<f64>>) -> Vector3<f64> {
-        match bxdf {
-            Bxdf::ScaledBxdf { inner, scale } => {
-                // no scaling necessary because rho_p calls f() and sample_f, which does
-                // the scaling
-                Bxdf::rho(inner.as_ref(), samples1, samples2)
-            }
-            Bxdf::SpecularReflection { color, fresnel, bxdf_type } => {
-                println!("Error: Calling unimplemented function on line {} in {}.", line!(), file!());
-                util::black()
-            }
-            Bxdf::SpecularTransmission { color, eta_a, eta_b, fresnel, mode, bxdf_type } => {
-                println!("Error: Calling unimplemented function on line {} in {}.", line!(), file!());
-                util::black()
-            }
-            Bxdf::LambertianReflection { color, bxdf_type } => {*color}
-            Bxdf::OrenNayer { color, a, b, bxdf_type } => {
-                println!("Error: Calling unimplemented function on line {} in {}.", line!(), file!());
-                util::black()
-            }
-            Bxdf::MicrofacetReflection { color, fresnel, mfd, bxdf_type } => {
-                println!("Error: Calling unimplemented function on line {} in {}.", line!(), file!());
-                util::black()
-            }
-            Bxdf::MicrofacetTransmission { color, fresnel, mfd, eta_a, eta_b, mode, bxdf_type } => {
-                println!("Error: Calling unimplemented function on line {} in {}.", line!(), file!());
-                util::black()
-            }
-            Bxdf::FresnelBlend { r_s, r_d, mfd, bxdf_type } => {
-                println!("Error: Calling unimplemented function on line {} in {}.", line!(), file!());
-                util::black()
-            }
-            Bxdf::FresnelSpecular { r, t, eta_a, eta_b, mode, bxdf_type } => {
-                println!("Error: Calling unimplemented function on line {} in {}.", line!(), file!());
-                util::black()
+            Bxdf::LambertianTransmission { color, bxdf_type } => {
+                let mut wi = util::cosine_sample_hemisphere(sample);
+                if wi.z > 0f64 { // ensure it's in the opposite hemisphere
+                    wi.z = -wi.z;
+                }
+                let pdf = Bxdf::pdf(bxdf, wo, &wi);
+                (Bxdf::f(bxdf, wo, &wi), wi, pdf)
             }
         }
     }
 
     pub fn pdf(&self, wo: &Vector3<f64>, wi: &Vector3<f64>) -> f64 {
         match self {
-            Bxdf::ScaledBxdf { inner, scale } => { Bxdf::pdf(inner.as_ref(), wo, wi) }
-            Bxdf::SpecularReflection { color, fresnel, bxdf_type } => { Bxdf::default_pdf(wo, wi) }
-            Bxdf::SpecularTransmission { color, eta_a, eta_b, fresnel, mode, bxdf_type } => {
+            Bxdf::ScaledBxdf { inner, .. } => { Bxdf::pdf(inner.as_ref(), wo, wi) }
+            Bxdf::SpecularReflection { .. } => { Bxdf::default_pdf(wo, wi) }
+            Bxdf::SpecularTransmission { .. } => { 0f64 }
+            Bxdf::LambertianReflection { .. } => { Bxdf::default_pdf(wo, wi) }
+            Bxdf::LambertianTransmission { .. } => {
                 if !util::same_hemisphere(wo, wi) {
                     abs_cos_theta(wi) * INV_PI
                 } else {
                     0.
                 }
             }
-            Bxdf::LambertianReflection { color, bxdf_type } => { Bxdf::default_pdf(wo, wi) }
-            Bxdf::OrenNayer { color, a, b, bxdf_type } => { Bxdf::default_pdf(wo, wi) }
-            Bxdf::MicrofacetReflection { color, fresnel, mfd, bxdf_type } => {
-                // Bxdf::default_pdf(wo, wi)
+            Bxdf::OrenNayer { .. } => { Bxdf::default_pdf(wo, wi) }
+            Bxdf::MicrofacetReflection { mfd, .. } => {
                 if !util::same_hemisphere(wo, wi) {
                     return 0.;
                 }
                 let wh: Unit<Vector3<f64>> = Unit::new_normalize(wo + wi);
                 MicrofacetDistribution::pdf(&mfd, wo, &wh) / (4. * wo.dot(&wh))
             }
-            Bxdf::MicrofacetTransmission { color, fresnel, mfd, eta_a, eta_b, mode, bxdf_type } => {
+            Bxdf::MicrofacetTransmission { mfd, eta_a, eta_b, .. } => {
                 if util::same_hemisphere(wo, wi) {
                     return 0.;
                 }
@@ -478,6 +515,22 @@ impl Bxdf {
             Bxdf::FresnelSpecular { r, t, eta_a, eta_b, mode, bxdf_type } => {
                 println!("Error: Calling unimplemented function on line {} in {}.", line!(), file!());
                 0.
+            }
+            Bxdf::DisneyDiffuse { .. } => { Bxdf::default_pdf(wo, wi) }
+            Bxdf::DisneyFakeSS { .. } => { Bxdf::default_pdf(wo, wi) }
+            Bxdf::DisneyRetro { .. } => { Bxdf::default_pdf(wo, wi) }
+            Bxdf::DisneySheen { .. } => { Bxdf::default_pdf(wo, wi) }
+            Bxdf::DisneyClearCoat { weight, gloss, bxdf_type } => {
+                if !util::same_hemisphere(wo, wi) {
+                    return 0f64;
+                }
+                let wh = wi + wo;
+                if wh == util::black() {
+                    return 0f64;
+                }
+                let wh = Unit::new_normalize(wh);
+                let dr = gtr1(abs_cos_theta(&wh), *gloss);
+                dr * abs_cos_theta(&wh) / (4f64 * wo.dot(&wh))
             }
         }
     }
@@ -505,11 +558,17 @@ impl Bxdf {
             Bxdf::SpecularReflection { bxdf_type, .. } => { *bxdf_type }
             Bxdf::SpecularTransmission { bxdf_type, .. } => {*bxdf_type}
             Bxdf::LambertianReflection { bxdf_type, .. } => {*bxdf_type}
+            Bxdf::LambertianTransmission { bxdf_type, .. } => {*bxdf_type}
             Bxdf::OrenNayer { bxdf_type, .. } => {*bxdf_type}
             Bxdf::MicrofacetReflection { bxdf_type, .. } => {*bxdf_type}
             Bxdf::MicrofacetTransmission { bxdf_type, .. } => {*bxdf_type}
             Bxdf::FresnelBlend { bxdf_type, .. } => {*bxdf_type}
             Bxdf::FresnelSpecular { bxdf_type, .. } => {*bxdf_type}
+            Bxdf::DisneyDiffuse { bxdf_type, .. } => {*bxdf_type}
+            Bxdf::DisneyFakeSS { bxdf_type, .. } => {*bxdf_type}
+            Bxdf::DisneyRetro { bxdf_type, .. } => {*bxdf_type}
+            Bxdf::DisneySheen { bxdf_type, .. } => {*bxdf_type}
+            Bxdf::DisneyClearCoat { bxdf_type, .. } => {*bxdf_type}
         }
     }
 
@@ -520,11 +579,17 @@ impl Bxdf {
             Bxdf::SpecularReflection { .. } => { "Specular Reflection" }
             Bxdf::SpecularTransmission { .. } => {"Specular Transmission"}
             Bxdf::LambertianReflection { .. } => {"Lambertian Reflection"}
+            Bxdf::LambertianTransmission { .. } => {"Lambertian Transmission"}
             Bxdf::OrenNayer { .. } => {"Oren Nayer"}
             Bxdf::MicrofacetReflection { .. } => {"Microfacet Refl"}
             Bxdf::MicrofacetTransmission { .. } => {"Microfacet Transmission"}
             Bxdf::FresnelBlend { .. } => {"Fresnel Blend"}
             Bxdf::FresnelSpecular { .. } => {"Fresnel Specular"}
+            Bxdf::DisneyDiffuse { .. } => { "Disney Diffuse" }
+            Bxdf::DisneyFakeSS { .. } => { "Disney Fake Subsurface" }
+            Bxdf::DisneyRetro { .. } => { "Disney Retroreflection" }
+            Bxdf::DisneySheen { .. } => { "Disney Sheen" }
+            Bxdf::DisneyClearCoat { .. } => { "Disney Clear Coat" }
         }
     }
 
@@ -573,5 +638,34 @@ impl Bxdf {
     pub fn make_fresnel_specular(r: Vector3<f64>, t: Vector3<f64>, eta_a: f64, eta_b: f64, mode: u8) -> Self {
         let bxdf_type = BSDF_TRANSMISSION | BSDF_REFLECTION | BSDF_SPECULAR;
         Bxdf::FresnelSpecular { r, t, eta_a, eta_b, mode, bxdf_type }
+    }
+
+    pub fn make_lambertian_transmission(color: Vector3<f64>) -> Self {
+        Bxdf::LambertianTransmission { color, bxdf_type: BSDF_TRANSMISSION | BSDF_DIFFUSE }
+    }
+
+    pub fn make_disney_diffuse(color: Vector3<f64>) -> Self {
+        let bxdf_type = BSDF_DIFFUSE | BSDF_REFLECTION;
+        Bxdf::DisneyDiffuse { color, bxdf_type }
+    }
+
+    pub fn make_disney_fake_ss(color: Vector3<f64>, roughness: f64) -> Self {
+        let bxdf_type = BSDF_DIFFUSE | BSDF_REFLECTION;
+        Bxdf::DisneyFakeSS { color, bxdf_type, roughness }
+    }
+
+    pub fn make_disney_retro(color: Vector3<f64>, roughness: f64) -> Self {
+        let bxdf_type = BSDF_DIFFUSE | BSDF_REFLECTION;
+        Bxdf::DisneyRetro { color, bxdf_type, roughness }
+    }
+
+    pub fn make_disney_sheen(color: Vector3<f64>) -> Self {
+        let bxdf_type = BSDF_DIFFUSE | BSDF_REFLECTION;
+        Bxdf::DisneySheen { color, bxdf_type }
+    }
+
+    pub fn make_disney_clearcoat(weight: f64, gloss: f64) -> Self {
+        let bxdf_type = BSDF_GLOSSY | BSDF_REFLECTION;
+        Bxdf::DisneyClearCoat { weight, gloss, bxdf_type }
     }
 }

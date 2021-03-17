@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use nalgebra::base::{Matrix4, Vector3};
 use nalgebra::geometry::{Point3, Rotation3, Projective3, Similarity3};
 use std::sync::Arc;
@@ -153,7 +154,7 @@ pub fn cornell_box_statue() -> (String, Camera, Samplers) {
     objects.textures.push(Texture::new_solid_color(Vector3::new(0.12, 0.45, 0.15))); // green
     objects.textures.push(Texture::new_solid_color(util::white()));
     objects.textures.push(Texture::new_solid_color(util::white().scale(0.3)));
-    objects.textures.push(Texture::new_solid_color(Vector3::new(0.005, 0f64, 0f64)));
+    objects.textures.push(Texture::new_solid_color(Vector3::new(0.01, 0f64, 0f64)));
     let purple = Vector3::new(0.1514, 0.0139, 0.3765).scale(0.2 / 0.3765);
     let spec_color = util::white().scale(1.13);
     objects.textures.push(Texture::new_solid_color(purple));
@@ -177,7 +178,7 @@ pub fn cornell_box_statue() -> (String, Camera, Samplers) {
     objects.objs.push(Primitive::new_flip_face(Box::new(Primitive::new_xz_rect(0., 0., 555., 555., 555., 0))));
     objects.objs.push(Primitive::new_flip_face(Box::new(Primitive::new_xy_rect(0., 0., 555., 555., 555., 0))));
     
-    objects.lights.push(Light::make_diffuse_light(2, Projective3::identity(), Vector3::new(0.97, 0.92, 0.23).scale(10f64), 20, true, false));
+    objects.lights.push(Light::make_diffuse_light(2, Projective3::identity(), Vector3::new(0.97, 0.92, 0.23).scale(25f64), 20, true, false));
     let translate = Projective3::from_matrix_unchecked(Matrix4::identity().append_translation(&Vector3::new(374., 435., 130.)));
     // let translate = Projective3::from_matrix_unchecked(Matrix4::identity().append_translation(&Vector3::new(470., 690., 230.)));
     let r1 = Rotation3::from_euler_angles(0., 0., PI);
@@ -222,13 +223,13 @@ pub fn plastic_dragon() -> (String, Camera, Samplers) {
     let temp_len = texts.len();
     texts.push(Texture::new_solid_color(light_gray));
     texts.push(Texture::new_solid_color(dark_gray));
-    texts.push(Texture::new_checkered(temp_len, temp_len+1, 0.1));
-    let purple = Vector3::new(0.1514, 0.0139, 0.3765).scale(0.4 / 0.3765);
+    texts.push(Texture::new_checkered(temp_len, temp_len+1, 10000f64));
+    let purple = Vector3::new(0.1514, 0.0139, 0.3765).scale(0.56 / 0.3765);
     let spec_color = util::white();
     texts.push(Texture::new_solid_color(purple));
     texts.push(Texture::new_solid_color(spec_color));
     mats.push(Material::make_matte(2, 0f64, 0));
-    mats.push(Material::make_plastic(3, 4, 0, 0.0, true));
+    mats.push(Material::make_plastic(3, 4, 0, 0.001, true));
     world.push(Primitive::new_xz_rect(-10000., -10000., 10000., 10000., -2.83, 0));
 
     let triangles = Mesh::generate_triangles(&meshes, 0, 1);
@@ -238,7 +239,7 @@ pub fn plastic_dragon() -> (String, Camera, Samplers) {
     let mut light_obj = Primitive::new_xz_rect(-5., -5., 5., 5., 15., 0);
     light_obj.set_light_index(0);
     world.push(Primitive::new_flip_face(Box::new(light_obj)));
-    objects.lights.push(Light::make_diffuse_light(world.len() - 1, Projective3::identity(), util::white().scale(1f64), 10, false, false));
+    objects.lights.push(Light::make_diffuse_light(world.len() - 1, Projective3::identity(), util::white().scale(4f64), 10, false, false));
 
     let len = world.len();
     let mut indices: Vec<usize> = (0usize..len).collect();
@@ -452,56 +453,6 @@ pub fn two_dragons() -> (String, Camera, Samplers) {
 }
 
 #[allow(dead_code)]
-pub fn studio() -> (String, Camera, Samplers) {
-    let objects = geometry::get_objects_mut();
-    let texts = &mut objects.textures;
-    let mats = &mut objects.materials;
-    let world = &mut objects.objs;
-    let meshes = &mut objects.meshes;
-    let lights = &mut objects.lights;
-    // let from: Point3<f64> = Point3::new(-0.0, 4., 70.);
-    // let to: Point3<f64> = Point3::new(-0.8, 1.0, 0.13);
-    // let up: Vector3<f64> = Vector3::new(0., 2., 0.);
-    let radians = 10f64;
-    let r = 82.26f64.sqrt();
-    let from: Point3<f64> = Point3::new(r * (radians + PI / 4.4).sin(), 1.3, r * (radians + PI / 4.4).cos());
-    let to: Point3<f64> = Point3::new(0., 0.65, -0.08);
-    let up: Vector3<f64> = Vector3::new(0., 1., 0.);
-    let camera = geometry::Camera::new(from, to, up, ASPECT_RATIO, 160., 0.0, 10.);
-    // texts.push(Texture::new_texture("data/hdr/photo_studio_01.jpg"));
-    texts.push(Texture::new_hdr("data/hdr/photo_studio_01_1k.hdr"));
-    lights.push(Light::make_infinite_light(Projective3::identity(), 10, 0));
-    // let transform = Similarity3::new(Vector3::new(0., 0., 0.), Vector3::new(0., 0., 0.), 10.);
-    // let mesh = Mesh::new("data/dragon/dragon.obj", Projective3::from_matrix_unchecked(transform.to_homogeneous()), 1);
-    // meshes.push(mesh);
-    
-
-    // let light_gray = Vector3::new(0.4, 0.15, 0.15).scale(2.);
-    // let dark_gray = Vector3::new(0.15, 0.15, 0.4).scale(2.);
-    // let temp_len = texts.len();
-    // texts.push(Texture::new_solid_color(light_gray));
-    // texts.push(Texture::new_solid_color(dark_gray));
-    // texts.push(Texture::new_checkered(temp_len, temp_len+1, 0.1));
-    // let purple = Vector3::new(0.1514, 0.0139, 0.3765).scale(0.2 / 0.3765);
-    // let spec_color = util::white().scale(0.93);
-    // texts.push(Texture::new_solid_color(purple));
-    // texts.push(Texture::new_solid_color(spec_color));
-    // mats.push(Material::make_matte(3, 0f64, 0));
-    // mats.push(Material::make_plastic(4, 5, 0, 0.005, true));
-    // world.push(Primitive::new_xz_rect(-10000., -10000., 10000., 10000., -2.83, 0));
-
-    // let triangles = Mesh::generate_triangles(&meshes, 0, 1);
-    // for tri in triangles {
-    //     world.push(tri);
-    // }
-    // let len = world.len();
-    // let mut indices: Vec<usize> = (0usize..len).collect();
-    // let bvh = BvhNode::new(&world, &mut indices, 0, len, 0., 1.);
-    // objects.node = bvh;
-    let sampler = Samplers::new_zero_two_sequence_sampler(SAMPLES_PER_PIXEL.into(), 0);
-    ("studio_h.png".to_string(), camera, sampler)
-}
-
 pub fn material_hdr() -> (String, Camera, Samplers) {
     let objects = geometry::get_objects_mut();
     let texts = &mut objects.textures;
@@ -545,24 +496,14 @@ pub fn material_hdr() -> (String, Camera, Samplers) {
     meshes.push(mesh1);
     meshes.push(mesh2);
     meshes.push(mesh0);
-    let purple = Vector3::new(0.1608, 0.0014767, 0.4);
-    let spec_color = util::white();
-    let eta = util::white();
-    let k = util::black();
-    texts.push(Texture::new_solid_color(purple));
-    texts.push(Texture::new_solid_color(spec_color));
+    smooth_plastic(texts, mats);
+    let len = texts.len();
     texts.push(Texture::new_solid_color(util::white().scale(0.2)));
     texts.push(Texture::new_solid_color(Vector3::new(0.325, 0.31, 0.325)));
     texts.push(Texture::new_solid_color(Vector3::new(0.725, 0.71, 0.68)));
-    texts.push(Texture::new_checkered(4, 5, 10f64));
-    texts.push(Texture::new_solid_color(eta)); // 7
-    texts.push(Texture::new_solid_color(k)); // 8
-    texts.push(Texture::new_solid_color(Vector3::new(0.001, 0f64, 0f64)));
-    mats.push(Material::make_plastic(1, 2, 0, 0.001, false));
-    // mats.push(Material::make_mirror(7, 0));
-    // mats.push(Material::make_metal(8, 7, 9, 9, 9, 0, true));
-    mats.push(Material::make_matte(3, 0f64, 0));
-    mats.push(Material::make_matte(6, 0f64, 0));
+    texts.push(Texture::new_checkered(len + 1, len + 2, 10f64));
+    mats.push(Material::make_matte(len, 0f64, 0));
+    mats.push(Material::make_matte(len + 3, 0f64, 0));
 
     let triangles = Mesh::generate_triangles(meshes, 0, 0);
     for tri in triangles {
@@ -583,4 +524,49 @@ pub fn material_hdr() -> (String, Camera, Samplers) {
     objects.node = bvh;
     let sampler = Samplers::new_zero_two_sequence_sampler(SAMPLES_PER_PIXEL.into(), 0);
     ("material.png".to_string(), camera, sampler)
+}
+
+fn smooth_plastic(texts: &mut Vec<Texture>, mats: &mut Vec<Material>) {
+    let curr_len = texts.len();
+    let purple = Vector3::new(0.1608, 0.0014767, 0.4);
+    let spec_color = util::white();
+    texts.push(Texture::new_solid_color(purple));
+    texts.push(Texture::new_solid_color(spec_color));
+    mats.push(Material::make_plastic(curr_len, curr_len + 1, 0, 0.002, false));
+}
+
+fn disney_mat(texts: &mut Vec<Texture>, mats: &mut Vec<Material>) {
+    let current_len = texts.len();
+    texts.push(Texture::new_solid_color(Vector3::new(0.1608, 0.0014767, 0.4))); // color
+    texts.push(Texture::new_solid_color(Vector3::new(0f64, 0f64, 0f64))); // metallic
+    texts.push(Texture::new_solid_color(Vector3::new(1.5f64, 0f64, 0f64))); // eta or specular?
+    texts.push(Texture::new_solid_color(Vector3::new(0.5f64, 0f64, 0f64))); // roughness
+    texts.push(Texture::new_solid_color(Vector3::new(0f64, 0f64, 0f64))); // spec_tint
+    texts.push(Texture::new_solid_color(Vector3::new(0f64, 0f64, 0f64))); // anisotropic
+    texts.push(Texture::new_solid_color(Vector3::new(0f64, 0f64, 0f64))); // sheen
+    texts.push(Texture::new_solid_color(Vector3::new(0.5f64, 0f64, 0f64))); // sheen_tint
+    texts.push(Texture::new_solid_color(Vector3::new(0f64, 0f64, 0f64))); // clearcoat
+    texts.push(Texture::new_solid_color(Vector3::new(1f64, 0f64, 0f64))); // clearcoat_gloss
+    texts.push(Texture::new_solid_color(Vector3::new(0f64, 0f64, 0f64))); // spec_trans
+    texts.push(Texture::new_solid_color(Vector3::new(0f64, 0f64, 0f64))); // scatter_distance USE ALL THREE
+    texts.push(Texture::new_solid_color(Vector3::new(0f64, 0f64, 0f64))); // flatness
+    texts.push(Texture::new_solid_color(Vector3::new(1f64, 0f64, 0f64))); // diff_trans
+
+
+    mats.push(Material::make_disney(current_len,
+                                    current_len + 1,
+                                    current_len + 2,
+                                    current_len + 3,
+                                    current_len + 4,
+                                    current_len + 5,
+                                    current_len + 6,
+                                    current_len + 7,
+                                    current_len + 8,
+                                    current_len + 9,
+                                    current_len + 10,
+                                    current_len + 11,
+                                    false,
+                                    current_len + 12,
+                                    current_len + 13,
+                                    0))
 }

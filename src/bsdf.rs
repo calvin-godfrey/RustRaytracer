@@ -37,7 +37,7 @@ impl Bsdf {
         self.bxdfs.push(Box::new(bxdf));
     }
 
-    pub fn num_components(&self, bxdf_type: u8) -> u32{
+    pub fn num_components(&self, bxdf_type: u8) -> u32 {
         let mut cnt: u32 = 0;
         for i in 0..self.bxdfs.len() {
             if bxdf::Bxdf::matches_flag(self.bxdfs[i].as_ref(), bxdf_type) {
@@ -98,15 +98,14 @@ impl Bsdf {
                 count -= 1;
             }
         }
-        assert!(used_index != std::usize::MAX);
         let sampled_type = bxdf.get_type();
         let wo = Unit::new_normalize(self.world_to_local(wow)).into_inner();
         if wo.z == 0. {
-            (util::black(), util::black(), 0f64, 0u8);
+            return (util::black(), util::black(), 0f64, 0u8);
         }
         let (mut color, wi, mut pdf) = bxdf::Bxdf::sample_f(bxdf, &wo, sample, bxdf_type);
         if pdf == 0. {
-            (util::black(), util::black(), 0f64, 0u8);
+            return (util::black(), util::black(), 0f64, 0u8);
         }
         let wiw = self.local_to_world(&wi);
         
