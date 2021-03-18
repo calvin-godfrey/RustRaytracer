@@ -3,12 +3,12 @@
 pub const GAMMA: f64 = 2.2;
 pub const IMAGE_WIDTH: u32 = 720;
 pub const ASPECT_RATIO: f64 = 9.0 / 9.0;
-pub const SAMPLES_PER_PIXEL: u32 = 1;
+pub const SAMPLES_PER_PIXEL: u32 = 1000;
 pub const MAX_DEPTH: u32 = 25;
 pub const NUM_THREADS: u32 = 6;
 pub const AMBIENT_LIGHT: bool = true;
 pub const TILE_SIZE: u32 = 16;
-pub const UPDATE_PICTURE_FREQUENCY: u64 = 5;
+pub const UPDATE_PICTURE_FREQUENCY: u64 = 1;
 pub const TONE_MAPPING: bool = true;
 // BxDF type constants
 pub const BSDF_REFLECTION: u8 = 1 << 0;
@@ -34,7 +34,7 @@ pub const INV_COL_MAX: f64 = 1. / 256.;
 pub const ONE_MINUS_EPSILON: f64 = 1f64 - std::f64::EPSILON / 2.;
 // Defined in terms of those above
 pub const IMAGE_HEIGHT: u32 = ((IMAGE_WIDTH as f64) / ASPECT_RATIO) as u32;
-pub const THREAD_UPDATE: u64 = RAYS_PER_THREAD / 200u64;
+pub const THREAD_UPDATE: u64 = 500;
 pub const TOTAL_RAYS: u64 =
     (IMAGE_WIDTH as u64) * (IMAGE_HEIGHT as u64) * (SAMPLES_PER_PIXEL as u64);
 pub const RAYS_PER_THREAD: u64 = TOTAL_RAYS / (NUM_THREADS as u64);

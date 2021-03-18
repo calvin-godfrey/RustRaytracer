@@ -2,7 +2,7 @@ use consts::*;
 use imgui::{im_str, ImString, TextureId, Textures, Window};
 use integrator::IntType;
 use scenes::*;
-use std::time::SystemTime;
+use std::{thread, time::SystemTime};
 
 mod bsdf;
 mod bxdf;
@@ -40,6 +40,41 @@ impl Default for State {
 }
 
 fn main() {
+    for t in 0..2 {
+        if t == 0 {
+            thread::spawn(move || {
+                let now = SystemTime::now();
+                let int_type = IntType::Path { max_depth: MAX_DEPTH, invisible_light: false };
+                let (path, camera, sampler) = material_hdr();
+                render::progressive_multithread(path, camera, sampler, int_type);
+                match now.elapsed() {
+                    Ok(elapsed) => {
+                        let milliseconds = elapsed.as_millis() % 1000;
+                        let seconds = elapsed.as_secs();
+                        let minutes = seconds / 60;
+                        let hours = minutes / 60;
+                        let seconds = seconds % 60;
+                        if hours != 0 {
+                            let minutes = minutes - hours * 60;
+                            println!("Render finished after {} ms ({}:{}:{}.{})", elapsed.as_millis(), hours, minutes, seconds, milliseconds);
+                        } else {
+                            if minutes == 0 {
+                                println!("Render finished after {} ms ({}.{}s)", elapsed.as_millis(), seconds, milliseconds);
+                            } else {
+                                println!("Render finished after {} ms ({}:{}.{})", elapsed.as_millis(), minutes, seconds, milliseconds);
+                            }
+                        }
+                    }
+                    Err(_) => {}
+                }
+            });
+        } else {
+            make_frontend();
+        }
+    }
+}
+
+pub fn make_frontend() {
     let system = imgui_support::init(file!());
     let mut state = State::default();
 
@@ -63,6 +98,7 @@ fn main() {
                 ));
             });
         if state.has_image {
+            imgui_support::refresh_img(state.path.to_str(), renderer, display);
             Window::new(im_str!("Render:"))
                 .size([720f32, 720f32], imgui::Condition::FirstUseEver)
                 .build(ui, || {
@@ -70,29 +106,4 @@ fn main() {
                 });
         }
     });
-
-    // let now = SystemTime::now();
-    // let int_type = IntType::Path { max_depth: MAX_DEPTH, invisible_light: false };
-    // let (path, camera, sampler) = material_hdr();
-    // render::tile_multithread(path, camera, sampler, int_type);
-    // match now.elapsed() {
-    //     Ok(elapsed) => {
-    //         let milliseconds = elapsed.as_millis() % 1000;
-    //         let seconds = elapsed.as_secs();
-    //         let minutes = seconds / 60;
-    //         let hours = minutes / 60;
-    //         let seconds = seconds % 60;
-    //         if hours != 0 {
-    //             let minutes = minutes - hours * 60;
-    //             println!("Render finished after {} ms ({}:{}:{}.{})", elapsed.as_millis(), hours, minutes, seconds, milliseconds);
-    //         } else {
-    //             if minutes == 0 {
-    //                 println!("Render finished after {} ms ({}.{}s)", elapsed.as_millis(), seconds, milliseconds);
-    //             } else {
-    //                 println!("Render finished after {} ms ({}:{}.{})", elapsed.as_millis(), minutes, seconds, milliseconds);
-    //             }
-    //         }
-    //     }
-    //     Err(_) => {}
-    // }
 }

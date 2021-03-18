@@ -170,3 +170,27 @@ pub fn add_img(path: &str, renderer: &mut Renderer, display: &mut glium::Display
         Err(_) => TextureId::new(usize::MAX),
     }
 }
+
+pub fn refresh_img(path: &str, renderer: &mut Renderer, display: &mut glium::Display) -> bool {
+    let textures: &mut Textures<Texture> = &mut renderer.textures();
+    let res_img = image::open(path);
+    match res_img {
+        Ok(image) => {
+            let image = image.to_rgba8();
+            let dimensions = image.dimensions();
+            let texture = RawImage2d::from_raw_rgba(image.into_raw(), dimensions);
+            let gl_texture = Texture2d::new(display.get_context(), texture).unwrap();
+            let texture = imgui_glium_renderer::Texture {
+                texture: Rc::new(gl_texture),
+                sampler: SamplerBehavior {
+                    magnify_filter: MagnifySamplerFilter::Linear,
+                    minify_filter: MinifySamplerFilter::Linear,
+                    ..Default::default()
+                },
+            };
+            textures.replace(TextureId::new(0), texture);
+            true
+        }
+        Err(_) => false
+    }
+}

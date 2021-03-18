@@ -5,7 +5,7 @@ use nalgebra::{
     geometry::{Point2, Point3, Projective3},
     Matrix3,
 };
-use rand::distributions::Standard;
+use rand::distributions::{Standard, Uniform};
 use rand::prelude::*;
 use std::{
     collections::HashSet,
@@ -30,7 +30,7 @@ pub fn clamp(x: f64, min: f64, max: f64) -> f64 {
 }
 
 pub fn rand() -> f64 {
-    StdRng::from_entropy().sample(Standard)
+    StdRng::from_entropy().sample(Uniform::new(0f64, 1f64))
 }
 
 pub fn rand_range(min: f64, max: f64) -> f64 {
@@ -212,22 +212,24 @@ pub fn increment_color(
     j: usize,
     color: &Vector3<f64>,
 ) {
-    arr[i][j].0 += if color.x == std::f64::NAN {
+    let height = arr.len();
+    let width = arr[0].len();
+    arr[i % height][j % width].0 += if color.x == std::f64::NAN {
         0.
     } else {
         color.x
     };
-    arr[i][j].1 += if color.y == std::f64::NAN {
+    arr[i % height][j % width].1 += if color.y == std::f64::NAN {
         0.
     } else {
         color.y
     };
-    arr[i][j].2 += if color.z == std::f64::NAN {
+    arr[i % height][j % width].2 += if color.z == std::f64::NAN {
         0.
     } else {
         color.z
     };
-    arr[i][j].3 += 1;
+    arr[i % height][j % width].3 += 1;
 }
 
 #[allow(dead_code)]
@@ -331,6 +333,33 @@ pub fn thread_safe_draw_picture(
                     color = Rgb([255, 211, 0]);
                 }
             }
+            img_guard.put_pixel(j, i, color);
+        }
+    }
+    let res = img_guard.save(path);
+    match res {
+        Ok(_) => {}
+        Err(_) => {
+            std::thread::sleep(std::time::Duration::from_secs(1)); // just wait and try again
+            img_guard.save(path).unwrap();
+        }
+    }
+}
+
+pub fn progressive_draw_picture(
+    img: &Mutex<image::RgbImage>,
+    pixels: &Mutex<Vec<Vec<(f64, f64, f64, u32)>>>,
+    path: &str,
+) {
+    let mut img_guard = img.lock().unwrap();
+    let pixels_guard = pixels.lock().unwrap();
+
+    for i in 0..img_guard.height() {
+        let w = i as usize;
+        for j in 0..img_guard.width() {
+            let (r, g, b, n) = pixels_guard[w][j as usize];
+            let pt = Point3::new(r / n as f64, g / n as f64, b / n as f64);
+            let color = point_to_color(&pt, 1. / GAMMA, 1);
             img_guard.put_pixel(j, i, color);
         }
     }

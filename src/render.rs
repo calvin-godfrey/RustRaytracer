@@ -135,3 +135,64 @@ pub fn tile_multithread(path: String, camera: Camera, sampler: Samplers, int_typ
         handle.join().unwrap();
     }
 }
+
+pub fn progressive_multithread(path: String, camera: Camera, sampler: Samplers, int_type: IntType) {
+    let img = RgbImage::new(IMAGE_WIDTH, IMAGE_HEIGHT);
+    let pixels: Vec<Vec<(f64, f64, f64, u32)>> =
+        util::make_empty_image(IMAGE_HEIGHT as usize, IMAGE_WIDTH as usize);
+    let pixels_mutex: Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>> = Arc::new(Mutex::new(pixels));
+    let image_arc: Arc<Mutex<image::RgbImage>> = Arc::new(Mutex::new(img));
+    let mut thread_vec: Vec<thread::JoinHandle<()>> = Vec::new();
+
+    for j in 0..NUM_THREADS {
+        let camera_clone = camera.clone();
+        let sampler_clone = sampler.clone();
+        let int_type_clone = int_type.clone();
+        let pixels_clone = Arc::clone(&pixels_mutex);
+
+        thread_vec.push(thread::spawn(move || {
+            let mut img_integrator = get_integrator(int_type_clone, camera_clone, sampler_clone);
+            img_integrator.init();
+            let mut local_img: Vec<Vec<(f64, f64, f64, u32)>> = util::make_empty_image(IMAGE_HEIGHT as usize, IMAGE_WIDTH as usize);
+            for ray_num in 0..(RAYS_PER_THREAD) {
+                let px = (util::rand() * IMAGE_WIDTH as f64) as u32;
+                let py = (util::rand() * IMAGE_HEIGHT as f64) as u32;
+                img_integrator.single_sample(&mut local_img, px, py);
+                if ray_num % THREAD_UPDATE == 0 {
+                    util::thread_safe_update_image(&pixels_clone, &local_img);
+                    local_img = util::make_empty_image(IMAGE_HEIGHT as usize, IMAGE_WIDTH as usize);
+                }
+            }
+        }));
+    }
+
+    let img_clone = Arc::clone(&image_arc);
+
+    // this thread just checks every five seconds to update the displayed picture
+    thread_vec.push(thread::spawn(move || {
+        let mut local_img = util::make_empty_image(IMAGE_HEIGHT as usize, IMAGE_WIDTH as usize);
+        loop {
+            let mut update = false;
+            thread::sleep(std::time::Duration::from_secs(UPDATE_PICTURE_FREQUENCY));
+            let pixels_guard = pixels_mutex.lock().unwrap();
+            for i in 0..IMAGE_HEIGHT {
+                for j in 0..IMAGE_WIDTH {
+                    if local_img[i as usize][j as usize] != pixels_guard[i as usize][j as usize] {
+                        local_img[i as usize][j as usize] = pixels_guard[i as usize][j as usize];
+                        update = true;
+                    }
+                }
+            }
+            drop(pixels_guard);
+            util::progressive_draw_picture(&img_clone, &pixels_mutex, &path[..]);
+            if !update {
+                // none of the pixels have changed, so we're done
+                break;
+            }
+        }
+    }));
+
+    for handle in thread_vec {
+        handle.join().unwrap();
+    }
+}

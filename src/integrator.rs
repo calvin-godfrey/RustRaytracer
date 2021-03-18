@@ -43,6 +43,7 @@ pub trait Integrator {
     fn render(&mut self, grid: &mut Vec<Vec<(f64, f64, f64, u32)>>, px: u32, py: u32);
     fn get_sampler(&mut self) -> &mut Samplers;
     fn init(&mut self);
+    fn single_sample(&mut self, grid: &mut Vec<Vec<(f64, f64, f64, u32)>>, px: u32, py: u32);
 }
 
 pub trait SamplerIntegrator: Integrator {
@@ -97,16 +98,7 @@ impl Integrator for WhittedIntegrator {
         let seed = py * IMAGE_WIDTH + px;
         Samplers::start_pixel(&mut self.sampler, &Point2::new(px as i32, py as i32));
         loop {
-            let (p_film, time, p_lens) = self
-                .sampler
-                .get_camera_sample(&Point2::new(px as i32, py as i32));
-            // TODO: Allow lenses to change the weighting of ray based on lens
-            let ray = self.camera.get_ray(
-                p_film.x / (IMAGE_WIDTH as f64),
-                p_film.y / (IMAGE_HEIGHT as f64),
-            );
-            let color = self.li(ray, self.max_depth);
-            util::increment_color(grid, y as usize, x as usize, &color);
+            self.single_sample(grid, px, py);
             if self.sampler.start_next_sample() == false {
                 break;
             }
@@ -118,6 +110,19 @@ impl Integrator for WhittedIntegrator {
     }
     fn init(&mut self) {
         self.preprocess();
+    }
+
+    fn single_sample(&mut self, grid: &mut Vec<Vec<(f64, f64, f64, u32)>>, px: u32, py: u32) {
+        let (p_film, time, p_lens) = self
+                .sampler
+                .get_camera_sample(&Point2::new(px as i32, py as i32));
+            // TODO: Allow lenses to change the weighting of ray based on lens
+            let ray = self.camera.get_ray(
+                p_film.x / (IMAGE_WIDTH as f64),
+                p_film.y / (IMAGE_HEIGHT as f64),
+            );
+            let color = self.li(ray, self.max_depth);
+            util::increment_color(grid, py as usize, px as usize, &color);
     }
 }
 
@@ -180,11 +185,7 @@ impl Integrator for BasicIntegrator {
         let y = py % TILE_SIZE;
         // calculate the samples for the pixel
         for _ in 0..SAMPLES_PER_PIXEL {
-            let u: f64 = (px as f64 + self.sampler.get_1d()) / ((IMAGE_WIDTH - 1) as f64);
-            let v: f64 = (py as f64 + self.sampler.get_1d()) / ((IMAGE_HEIGHT - 1) as f64);
-            let ray = self.camera.get_ray(u, v);
-            let res: Vector3<f64> = geometry::cast_ray(&ray, self.max_depth);
-            util::increment_color(grid, y as usize, x as usize, &res);
+            self.single_sample(grid, px, py);
         }
     }
 
@@ -192,6 +193,14 @@ impl Integrator for BasicIntegrator {
         &mut self.sampler
     }
     fn init(&mut self) {}
+
+    fn single_sample(&mut self, grid: &mut Vec<Vec<(f64, f64, f64, u32)>>, px: u32, py: u32) {
+        let u: f64 = (px as f64 + self.sampler.get_1d()) / ((IMAGE_WIDTH - 1) as f64);
+        let v: f64 = (py as f64 + self.sampler.get_1d()) / ((IMAGE_HEIGHT - 1) as f64);
+        let ray = self.camera.get_ray(u, v);
+        let res: Vector3<f64> = geometry::cast_ray(&ray, self.max_depth);
+        util::increment_color(grid, py as usize, px as usize, &res);
+    }
 }
 
 impl BasicIntegrator {
@@ -219,16 +228,7 @@ impl Integrator for DirectLightingIntegrator {
         let seed = py * IMAGE_WIDTH + px;
         Samplers::start_pixel(&mut self.sampler, &Point2::new(px as i32, py as i32));
         loop {
-            let (p_film, time, p_lens) = self
-                .sampler
-                .get_camera_sample(&Point2::new(px as i32, py as i32));
-            // TODO: Allow lenses to change the weighting of ray based on lens
-            let ray = self.camera.get_ray(
-                p_film.x / (IMAGE_WIDTH as f64),
-                p_film.y / (IMAGE_HEIGHT as f64),
-            );
-            let color = self.li(ray, self.max_depth);
-            util::increment_color(grid, y as usize, x as usize, &color);
+            self.single_sample(grid, px, py);
             if self.sampler.start_next_sample() == false {
                 break;
             }
@@ -240,6 +240,19 @@ impl Integrator for DirectLightingIntegrator {
     }
     fn init(&mut self) {
         self.preprocess();
+    }
+
+    fn single_sample(&mut self, grid: &mut Vec<Vec<(f64, f64, f64, u32)>>, px: u32, py: u32) {
+        let (p_film, time, p_lens) = self
+            .sampler
+            .get_camera_sample(&Point2::new(px as i32, py as i32));
+        // TODO: Allow lenses to change the weighting of ray based on lens
+        let ray = self.camera.get_ray(
+            p_film.x / (IMAGE_WIDTH as f64),
+            p_film.y / (IMAGE_HEIGHT as f64),
+        );
+        let color = self.li(ray, self.max_depth);
+        util::increment_color(grid, py as usize, px as usize, &color);
     }
 }
 
@@ -320,19 +333,10 @@ impl Integrator for PathIntegrator {
     fn render(&mut self, grid: &mut Vec<Vec<(f64, f64, f64, u32)>>, px: u32, py: u32) {
         let x = px % TILE_SIZE;
         let y = py % TILE_SIZE;
+        // GET RID OF THE TILE STUFF HERE
         let seed = py * IMAGE_WIDTH + px;
         Samplers::start_pixel(&mut self.sampler, &Point2::new(px as i32, py as i32));
         loop {
-            let (p_film, time, p_lens) = self
-                .sampler
-                .get_camera_sample(&Point2::new(px as i32, py as i32));
-            // TODO: Allow lenses to change the weighting of ray based on lens
-            let ray = self.camera.get_ray(
-                p_film.x / (IMAGE_WIDTH as f64),
-                p_film.y / (IMAGE_HEIGHT as f64),
-            );
-            let color = self.li(ray, self.max_depth);
-            util::increment_color(grid, y as usize, x as usize, &color);
             if self.sampler.start_next_sample() == false {
                 break;
             }
@@ -344,6 +348,19 @@ impl Integrator for PathIntegrator {
     }
     fn init(&mut self) {
         self.preprocess()
+    }
+
+    fn single_sample(&mut self, grid: &mut Vec<Vec<(f64, f64, f64, u32)>>, px: u32, py: u32) {
+        let (p_film, time, p_lens) = self
+            .sampler
+            .get_camera_sample(&Point2::new(px as i32, py as i32));
+        // TODO: Allow lenses to change the weighting of ray based on lens
+        let ray = self.camera.get_ray(
+            p_film.x / (IMAGE_WIDTH as f64),
+            p_film.y / (IMAGE_HEIGHT as f64),
+        );
+        let color = self.li(ray, self.max_depth);
+        util::increment_color(grid, py as usize, px as usize, &color);
     }
 }
 
