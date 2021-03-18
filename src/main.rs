@@ -1,50 +1,105 @@
-use std::time::SystemTime;
 use consts::*;
+use glium::{
+    backend::Facade, texture::RawImage2d, uniforms::MagnifySamplerFilter,
+    uniforms::MinifySamplerFilter, uniforms::SamplerBehavior, Display, Texture2d,
+};
+use imgui::{im_str, ImString, TextureId, Textures, Window};
+use imgui_glium_renderer::Texture;
+use imgui_support::System;
 use integrator::IntType;
 use scenes::*;
+use std::{io::Cursor, rc::Rc, time::SystemTime};
 
-mod util;
+mod bsdf;
+mod bxdf;
 mod consts;
-mod material;
-mod hittable;
+mod distribution;
 mod geometry;
+mod hittable;
+mod integrator;
+mod intersects;
+mod light;
+mod material;
+mod microfacet;
 mod parser;
-mod scenes;
 mod perlin;
 mod primitive;
-mod intersects;
-mod bxdf;
-mod microfacet;
-mod bsdf;
-mod light;
-mod sampler;
-mod integrator;
-mod distribution;
 mod render;
+mod sampler;
+mod scenes;
+mod util;
+
+mod imgui_support;
+
+struct State {
+    path: ImString,
+    has_image: bool,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            path: ImString::with_capacity(128),
+            has_image: false,
+        }
+    }
+}
 
 fn main() {
-    let now = SystemTime::now();
-    let int_type = IntType::Path { max_depth: MAX_DEPTH, invisible_light: false };
-    let (path, camera, sampler) = material_hdr();
-    render::tile_multithread(path, camera, sampler, int_type);
-    match now.elapsed() {
-        Ok(elapsed) => {
-            let milliseconds = elapsed.as_millis() % 1000;
-            let seconds = elapsed.as_secs();
-            let minutes = seconds / 60;
-            let hours = minutes / 60;
-            let seconds = seconds % 60;
-            if hours != 0 {
-                let minutes = minutes - hours * 60;
-                println!("Render finished after {} ms ({}:{}:{}.{})", elapsed.as_millis(), hours, minutes, seconds, milliseconds);
-            } else {
-                if minutes == 0 {
-                    println!("Render finished after {} ms ({}.{}s)", elapsed.as_millis(), seconds, milliseconds);
-                } else {
-                    println!("Render finished after {} ms ({}:{}.{})", elapsed.as_millis(), minutes, seconds, milliseconds);
+    let mut system = imgui_support::init(file!());
+    let mut state = State::default();
+
+    system.add_img(&"material.png"[..]);
+
+    // system.main_loop(move |run, ui| ui.show_demo_window(run));
+
+    system.main_loop(move |_, ui| {
+        Window::new(im_str!("hello world"))
+            .size([330.0, 110.0], imgui::Condition::FirstUseEver)
+            .position([0f32, 0f32], imgui::Condition::FirstUseEver)
+            .build(ui, || {
+                ui.input_text(im_str!("File path"), &mut state.path).build();
+                if ui.small_button(im_str!("Submit file")) {
+                    // system.add_img(state.path.to_str());
                 }
-            }
+                ui.separator();
+                let mouse_pos = ui.io().mouse_pos;
+                ui.text(format!(
+                    "Mouse position: ({:.1},{:.1})",
+                    mouse_pos[0], mouse_pos[1]
+                ));
+            });
+        if state.has_image {
+            Window::new(im_str!("Render:"))
+                .size([720f32, 720f32], imgui::Condition::FirstUseEver)
+                .build(ui, || {
+                    imgui::Image::new(TextureId::new(0), [720f32, 720f32]).build(ui);
+                });
         }
-        Err(_) => {}
-    }
+    });
+
+    // let now = SystemTime::now();
+    // let int_type = IntType::Path { max_depth: MAX_DEPTH, invisible_light: false };
+    // let (path, camera, sampler) = material_hdr();
+    // render::tile_multithread(path, camera, sampler, int_type);
+    // match now.elapsed() {
+    //     Ok(elapsed) => {
+    //         let milliseconds = elapsed.as_millis() % 1000;
+    //         let seconds = elapsed.as_secs();
+    //         let minutes = seconds / 60;
+    //         let hours = minutes / 60;
+    //         let seconds = seconds % 60;
+    //         if hours != 0 {
+    //             let minutes = minutes - hours * 60;
+    //             println!("Render finished after {} ms ({}:{}:{}.{})", elapsed.as_millis(), hours, minutes, seconds, milliseconds);
+    //         } else {
+    //             if minutes == 0 {
+    //                 println!("Render finished after {} ms ({}.{}s)", elapsed.as_millis(), seconds, milliseconds);
+    //             } else {
+    //                 println!("Render finished after {} ms ({}:{}.{})", elapsed.as_millis(), minutes, seconds, milliseconds);
+    //             }
+    //         }
+    //     }
+    //     Err(_) => {}
+    // }
 }

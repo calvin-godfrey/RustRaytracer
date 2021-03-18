@@ -1,10 +1,16 @@
 use hittable::HitRecord;
 use image::{Rgb, RgbImage};
-use nalgebra::{Matrix3, geometry::{Projective3, Point3, Point2}};
-use nalgebra::base::{Unit, Vector3, Vector2};
-use rand::prelude::*;
+use nalgebra::base::{Unit, Vector2, Vector3};
+use nalgebra::{
+    geometry::{Point2, Point3, Projective3},
+    Matrix3,
+};
 use rand::distributions::Standard;
-use std::{sync::{Mutex, Arc}, collections::HashSet};
+use rand::prelude::*;
+use std::{
+    collections::HashSet,
+    sync::{Arc, Mutex},
+};
 
 use crate::consts::*;
 use crate::geometry;
@@ -49,7 +55,9 @@ pub fn uniform_sample_sphere(u: &Point2<f64>) -> Vector3<f64> {
     Vector3::new(r * phi.cos(), r * phi.sin(), z)
 }
 
-pub fn uniform_sphere_pdf() -> f64 { INV_PI / 4f64 }
+pub fn uniform_sphere_pdf() -> f64 {
+    INV_PI / 4f64
+}
 
 pub fn uniform_sample_triangle(u: &Point2<f64>) -> Point2<f64> {
     let s0 = u[0].sqrt();
@@ -99,7 +107,7 @@ pub fn rand_in_disk() -> Vector3<f64> {
     loop {
         let x = rand();
         let y = rand();
-        if x*x + y*y < 1. {
+        if x * x + y * y < 1. {
             return Vector3::new(x, y, 0.);
         }
     }
@@ -110,7 +118,11 @@ pub fn rand_int(min: i32, max: i32) -> i32 {
 }
 
 pub fn rand_vector(min: f64, max: f64) -> Vector3<f64> {
-    Vector3::new(rand_range(min, max), rand_range(min, max), rand_range(min, max))
+    Vector3::new(
+        rand_range(min, max),
+        rand_range(min, max),
+        rand_range(min, max),
+    )
 }
 
 pub fn rand_cosine_dir() -> Vector3<f64> {
@@ -164,7 +176,11 @@ pub fn lerp(t: f64, min: f64, max: f64) -> f64 {
 }
 
 pub fn lerp_v(t: f64, min: &Vector3<f64>, max: &Vector3<f64>) -> Vector3<f64> {
-    Vector3::new(lerp(t, min.x, max.x), lerp(t, min.y, max.y), lerp(t, min.z, max.z))
+    Vector3::new(
+        lerp(t, min.x, max.x),
+        lerp(t, min.y, max.y),
+        lerp(t, min.z, max.z),
+    )
 }
 
 pub fn hable(x: f64) -> f64 {
@@ -190,32 +206,86 @@ pub fn reflect(v: &Vector3<f64>, n: &Unit<Vector3<f64>>) -> Vector3<f64> {
     -v + n.as_ref().scale(scale)
 }
 
-pub fn increment_color(arr: &mut Vec<Vec<(f64, f64, f64, u32)>>, i: usize, j: usize, color: &Vector3<f64>) {
-    arr[i][j].0 += if color.x == std::f64::NAN { 0. } else { color.x };
-    arr[i][j].1 += if color.y == std::f64::NAN { 0. } else { color.y };
-    arr[i][j].2 += if color.z == std::f64::NAN { 0. } else { color.z };
+pub fn increment_color(
+    arr: &mut Vec<Vec<(f64, f64, f64, u32)>>,
+    i: usize,
+    j: usize,
+    color: &Vector3<f64>,
+) {
+    arr[i][j].0 += if color.x == std::f64::NAN {
+        0.
+    } else {
+        color.x
+    };
+    arr[i][j].1 += if color.y == std::f64::NAN {
+        0.
+    } else {
+        color.y
+    };
+    arr[i][j].2 += if color.z == std::f64::NAN {
+        0.
+    } else {
+        color.z
+    };
     arr[i][j].3 += 1;
 }
 
 #[allow(dead_code)]
-pub fn thread_safe_write_pixel(arr: &Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>>, i: usize, j: usize, color: (f64, f64, f64, u32)) {
+pub fn thread_safe_write_pixel(
+    arr: &Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>>,
+    i: usize,
+    j: usize,
+    color: (f64, f64, f64, u32),
+) {
     let mut data = arr.lock().unwrap();
-    data[i][j].0 += if color.0 == std::f64::NAN { 0. } else { color.0 };
-    data[i][j].1 += if color.1 == std::f64::NAN { 0. } else { color.1 };
-    data[i][j].2 += if color.2 == std::f64::NAN { 0. } else { color.2 };
+    data[i][j].0 += if color.0 == std::f64::NAN {
+        0.
+    } else {
+        color.0
+    };
+    data[i][j].1 += if color.1 == std::f64::NAN {
+        0.
+    } else {
+        color.1
+    };
+    data[i][j].2 += if color.2 == std::f64::NAN {
+        0.
+    } else {
+        color.2
+    };
     data[i][j].3 += color.3;
 }
 
 #[allow(dead_code)]
-pub fn thread_safe_increment_color(arr: &Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>>, i: usize, j: usize, color: &Vector3<f64>) {
+pub fn thread_safe_increment_color(
+    arr: &Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>>,
+    i: usize,
+    j: usize,
+    color: &Vector3<f64>,
+) {
     let mut data = arr.lock().unwrap();
-    data[i][j].0 += if color.x == std::f64::NAN { 0. } else { color.x };
-    data[i][j].1 += if color.y == std::f64::NAN { 0. } else { color.y };
-    data[i][j].2 += if color.z == std::f64::NAN { 0. } else { color.z };
+    data[i][j].0 += if color.x == std::f64::NAN {
+        0.
+    } else {
+        color.x
+    };
+    data[i][j].1 += if color.y == std::f64::NAN {
+        0.
+    } else {
+        color.y
+    };
+    data[i][j].2 += if color.z == std::f64::NAN {
+        0.
+    } else {
+        color.z
+    };
     data[i][j].3 += 1;
 }
 
-pub fn thread_safe_update_image(arr: &Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>>, local: &Vec<Vec<(f64, f64, f64, u32)>>) {
+pub fn thread_safe_update_image(
+    arr: &Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>>,
+    local: &Vec<Vec<(f64, f64, f64, u32)>>,
+) {
     let mut data = arr.lock().unwrap();
     for i in 0usize..IMAGE_HEIGHT as usize {
         for j in 0usize..IMAGE_WIDTH as usize {
@@ -228,7 +298,12 @@ pub fn thread_safe_update_image(arr: &Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>>
     }
 }
 
-pub fn thread_safe_draw_picture(img: &Mutex<image::RgbImage>, pixels: &Mutex<Vec<Vec<(f64, f64, f64, u32)>>>, changed_tiles: &HashSet<(usize, usize)>, path: &str) {
+pub fn thread_safe_draw_picture(
+    img: &Mutex<image::RgbImage>,
+    pixels: &Mutex<Vec<Vec<(f64, f64, f64, u32)>>>,
+    changed_tiles: &HashSet<(usize, usize)>,
+    path: &str,
+) {
     let mut img_guard = img.lock().unwrap();
     let pixels_guard = pixels.lock().unwrap();
 
@@ -244,12 +319,17 @@ pub fn thread_safe_draw_picture(img: &Mutex<image::RgbImage>, pixels: &Mutex<Vec
                 let mod_x: usize = (j % TILE_SIZE) as usize;
                 let mod_y: usize = (i % TILE_SIZE) as usize;
                 // yellow border around active tiles
-                if (mod_x == 0 && (mod_y < TILE_SIZE as usize / 4 || mod_y > 3 * TILE_SIZE as usize / 4)) ||
-                   (mod_x == TILE_SIZE as usize - 1 && (mod_y < TILE_SIZE as usize / 4 || mod_y > 3 * TILE_SIZE as usize / 4)) ||
-                   (mod_y == 0 && (mod_x < TILE_SIZE as usize / 4 || mod_x > 3 * TILE_SIZE as usize / 4)) ||
-                   (mod_y == TILE_SIZE as usize - 1 && (mod_x < TILE_SIZE as usize / 4 || mod_x > 3 * TILE_SIZE as usize / 4)) {
-                       color = Rgb([255, 211, 0]);
-                   }
+                if (mod_x == 0
+                    && (mod_y < TILE_SIZE as usize / 4 || mod_y > 3 * TILE_SIZE as usize / 4))
+                    || (mod_x == TILE_SIZE as usize - 1
+                        && (mod_y < TILE_SIZE as usize / 4 || mod_y > 3 * TILE_SIZE as usize / 4))
+                    || (mod_y == 0
+                        && (mod_x < TILE_SIZE as usize / 4 || mod_x > 3 * TILE_SIZE as usize / 4))
+                    || (mod_y == TILE_SIZE as usize - 1
+                        && (mod_x < TILE_SIZE as usize / 4 || mod_x > 3 * TILE_SIZE as usize / 4))
+                {
+                    color = Rgb([255, 211, 0]);
+                }
             }
             img_guard.put_pixel(j, i, color);
         }
@@ -309,16 +389,20 @@ fn aces_computation_component(x: f64) -> f64 {
 }
 
 fn aces_computation(v: &Vector3<f64>) -> Vector3<f64> {
-    Vector3::new(aces_computation_component(v.x), aces_computation_component(v.y), aces_computation_component(v.z))
+    Vector3::new(
+        aces_computation_component(v.x),
+        aces_computation_component(v.y),
+        aces_computation_component(v.z),
+    )
 }
 
 fn aces_full(v: &Vector3<f64>) -> Vector3<f64> {
-    let input = Matrix3::new(0.59719, 0.35458, 0.04823,
-                                                 0.076, 0.9083, 0.01566,
-                                                 0.0284, 0.13383, 0.833777);
-    let output = Matrix3::new(1.60475, -0.53108, -0.07367,
-                                                  -0.10208, 1.10813, -0.00605,
-                                                  -0.00327, -0.07276, 1.0762);
+    let input = Matrix3::new(
+        0.59719, 0.35458, 0.04823, 0.076, 0.9083, 0.01566, 0.0284, 0.13383, 0.833777,
+    );
+    let output = Matrix3::new(
+        1.60475, -0.53108, -0.07367, -0.10208, 1.10813, -0.00605, -0.00327, -0.07276, 1.0762,
+    );
 
     let v = input * v;
     let v = aces_computation(&v);
@@ -349,16 +433,16 @@ fn point_to_color(vec: &Point3<f64>, gamma: f64, samples: u32) -> Rgb<u8> {
         r = final_color[0];
         g = final_color[1];
         b = final_color[2];
-
     } else {
         r = clamp(r, 0f64, 1f64);
         g = clamp(g, 0f64, 1f64);
         b = clamp(b, 0f64, 1f64);
     }
-    Rgb([(r.powf(gamma) * 256.).round() as u8,
+    Rgb([
+        (r.powf(gamma) * 256.).round() as u8,
         (g.powf(gamma) * 256.).round() as u8,
-        (b.powf(gamma) * 256.).round() as u8])
-
+        (b.powf(gamma) * 256.).round() as u8,
+    ])
 }
 
 pub fn mix(from: &Vector3<f64>, to: &Vector3<f64>, x: f64) -> Vector3<f64> {
@@ -375,21 +459,30 @@ pub fn get_sky(ray: &geometry::Ray) -> Vector3<f64> {
     let blue = Rgb([140u8, 159u8, 185u8]);
     let unit: Unit<Vector3<f64>> = Unit::new_normalize(ray.dir);
     let color = gradient(&white, &blue, 0.5 * (1.0 + unit.as_ref().y));
-    return Vector3::new(color[0] as f64 * INV_COL_MAX, color[1] as f64 * INV_COL_MAX, color[2] as f64 * INV_COL_MAX);
+    return Vector3::new(
+        color[0] as f64 * INV_COL_MAX,
+        color[1] as f64 * INV_COL_MAX,
+        color[2] as f64 * INV_COL_MAX,
+    );
 }
 
-pub fn get_background(_ray: &geometry::Ray) -> Vector3<f64> {Vector3::new(0., 0., 0.)}
+pub fn get_background(_ray: &geometry::Ray) -> Vector3<f64> {
+    Vector3::new(0., 0., 0.)
+}
 
-pub fn get_new_box(bbox: hittable::BoundingBox, t: &Arc<Projective3<f64>>) -> hittable::BoundingBox {
+pub fn get_new_box(
+    bbox: hittable::BoundingBox,
+    t: &Arc<Projective3<f64>>,
+) -> hittable::BoundingBox {
     let mut min: Point3<f64> = Point3::new(INFINITY, INFINITY, INFINITY);
-    let mut max: Point3<f64> = Point3::new(-INFINITY, -INFINITY,  -INFINITY);
+    let mut max: Point3<f64> = Point3::new(-INFINITY, -INFINITY, -INFINITY);
     for i in 0..2 {
         for j in 0..2 {
             for k in 0..2 {
                 let x = if i == 0 { bbox.min.x } else { bbox.max.x };
                 let y = if j == 0 { bbox.min.y } else { bbox.max.y };
                 let z = if k == 0 { bbox.min.z } else { bbox.max.z };
-                let p = Point3::new(x, y , z);
+                let p = Point3::new(x, y, z);
                 let np = t.transform_point(&p);
                 min.x = min.x.min(np.x);
                 min.y = min.y.min(np.y);
@@ -424,24 +517,36 @@ fn box_compare(a: &Primitive, b: &Primitive, axis: usize) -> std::cmp::Ordering 
         return std::cmp::Ordering::Equal;
     }
     match box_a {
-        Some(bound_a) => {
-            match box_b {
-                Some(bound_b) => {
-                    return if bound_a.min[axis] < bound_b.min[axis] { std::cmp::Ordering::Less } else { std::cmp::Ordering::Greater }
+        Some(bound_a) => match box_b {
+            Some(bound_b) => {
+                return if bound_a.min[axis] < bound_b.min[axis] {
+                    std::cmp::Ordering::Less
+                } else {
+                    std::cmp::Ordering::Greater
                 }
-                None => {panic!("Code in box_compare should not be reached: 1")}
             }
+            None => {
+                panic!("Code in box_compare should not be reached: 1")
+            }
+        },
+        None => {
+            panic!("Code in box_compare should not be reached: 2")
         }
-        None => {panic!("Code in box_compare should not be reached: 2")}
     }
 }
 
 #[allow(dead_code)]
-pub fn box_x_compare(a: &Primitive, b: &Primitive) -> std::cmp::Ordering { box_compare(a, b, 0) }
+pub fn box_x_compare(a: &Primitive, b: &Primitive) -> std::cmp::Ordering {
+    box_compare(a, b, 0)
+}
 #[allow(dead_code)]
-pub fn box_y_compare(a: &Primitive, b: &Primitive) -> std::cmp::Ordering { box_compare(a, b, 1) }
+pub fn box_y_compare(a: &Primitive, b: &Primitive) -> std::cmp::Ordering {
+    box_compare(a, b, 1)
+}
 #[allow(dead_code)]
-pub fn box_z_compare(a: &Primitive, b: &Primitive) -> std::cmp::Ordering { box_compare(a, b, 2) }
+pub fn box_z_compare(a: &Primitive, b: &Primitive) -> std::cmp::Ordering {
+    box_compare(a, b, 2)
+}
 
 pub fn make_coordinate_system(v1: &Vector3<f64>) -> (Vector3<f64>, Vector3<f64>) {
     let v2: Vector3<f64>;
@@ -456,7 +561,7 @@ pub fn make_coordinate_system(v1: &Vector3<f64>) -> (Vector3<f64>, Vector3<f64>)
 
 pub fn face_forward(n: Unit<Vector3<f64>>, v: &Vector3<f64>) -> Unit<Vector3<f64>> {
     let d = n.dot(&v);
-    return if d < 0. { -n } else { n }
+    return if d < 0. { -n } else { n };
 }
 
 pub fn white() -> Vector3<f64> {
@@ -475,14 +580,19 @@ pub fn make_spherical(sin_t: f64, cos_t: f64, phi: f64) -> Vector3<f64> {
     Vector3::new(sin_t * phi.cos(), sin_t * phi.sin(), cos_t)
 }
 
-pub fn correct_shading_normal(record: &HitRecord, wo: &Vector3<f64>, wi: &Vector3<f64>, mode: u8) -> f64 {
+pub fn correct_shading_normal(
+    record: &HitRecord,
+    wo: &Vector3<f64>,
+    wi: &Vector3<f64>,
+    mode: u8,
+) -> f64 {
     if mode == RADIANCE {
         1f64
     } else {
-        (wo.dot(&record.shading.n).abs() * wi.dot(&record.shading.n).abs()) / (wo.dot(&record.n).abs() * wi.dot(&record.n).abs())
+        (wo.dot(&record.shading.n).abs() * wi.dot(&record.shading.n).abs())
+            / (wo.dot(&record.n).abs() * wi.dot(&record.n).abs())
     }
 }
-
 
 // approximation of error function
 pub fn erf(x: f64) -> f64 {
@@ -500,7 +610,11 @@ pub fn erf(x: f64) -> f64 {
     let x = x.abs();
     let t = 1. / (1. + p * x);
     let y = 1. - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * (-x * x).exp();
-    if sign == 1 { y } else { -y }
+    if sign == 1 {
+        y
+    } else {
+        -y
+    }
 }
 
 pub fn inv_erf(x: f64) -> f64 {

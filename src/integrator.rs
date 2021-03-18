@@ -1,29 +1,42 @@
 #![allow(dead_code, unused_variables)] // TODO: Remove this
-use nalgebra::{Point3, base::Vector3};
-use nalgebra::geometry::Point2;
 use bumpalo::Bump;
+use nalgebra::geometry::Point2;
+use nalgebra::{base::Vector3, Point3};
 
-use crate::{hittable::HitRecord, geometry::{Ray, Camera}};
-use crate::sampler::Samplers;
 use crate::consts::*;
-use crate::util;
-use crate::{geometry::get_objects};
 use crate::geometry;
-use crate::material::materials::Material;
+use crate::geometry::get_objects;
 use crate::light::Light;
+use crate::material::materials::Material;
+use crate::sampler::Samplers;
+use crate::util;
+use crate::{
+    geometry::{Camera, Ray},
+    hittable::HitRecord,
+};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum LightStrategy {
     UniformAll,
-    UniformOne
+    UniformOne,
 }
 
 #[derive(Clone)]
 pub enum IntType {
-    Whitted { max_depth: u32 },
-    Basic { max_depth: u32 },
-    Direct { max_depth: u32, strategy: LightStrategy },
-    Path { max_depth: u32, invisible_light: bool }
+    Whitted {
+        max_depth: u32,
+    },
+    Basic {
+        max_depth: u32,
+    },
+    Direct {
+        max_depth: u32,
+        strategy: LightStrategy,
+    },
+    Path {
+        max_depth: u32,
+        invisible_light: bool,
+    },
 }
 
 pub trait Integrator {
@@ -37,27 +50,44 @@ pub trait SamplerIntegrator: Integrator {
     fn li(&mut self, ray: Ray, depth: u32) -> Vector3<f64>;
 }
 
-pub fn get_integrator<'a>(int_type: IntType, camera: Camera, sampler: Samplers) -> Box<dyn Integrator> {
+pub fn get_integrator<'a>(
+    int_type: IntType,
+    camera: Camera,
+    sampler: Samplers,
+) -> Box<dyn Integrator> {
     match int_type {
-        IntType::Whitted { max_depth } => {
-            Box::new(WhittedIntegrator::make_whitted_integrator(camera, sampler, max_depth))
-        }
-        IntType::Basic { max_depth } => {
-            Box::new(BasicIntegrator::make_basic_integrator(camera, sampler, max_depth))
-        }
-        IntType::Direct { max_depth, strategy } => {
-            Box::new(DirectLightingIntegrator::make_direct_lighting(camera, sampler, max_depth, Vec::new(), strategy))
-        }
-        IntType::Path { max_depth, invisible_light } => {
-            Box::new(PathIntegrator::make_path(camera, invisible_light, sampler, max_depth))
-        }
+        IntType::Whitted { max_depth } => Box::new(WhittedIntegrator::make_whitted_integrator(
+            camera, sampler, max_depth,
+        )),
+        IntType::Basic { max_depth } => Box::new(BasicIntegrator::make_basic_integrator(
+            camera, sampler, max_depth,
+        )),
+        IntType::Direct {
+            max_depth,
+            strategy,
+        } => Box::new(DirectLightingIntegrator::make_direct_lighting(
+            camera,
+            sampler,
+            max_depth,
+            Vec::new(),
+            strategy,
+        )),
+        IntType::Path {
+            max_depth,
+            invisible_light,
+        } => Box::new(PathIntegrator::make_path(
+            camera,
+            invisible_light,
+            sampler,
+            max_depth,
+        )),
     }
 }
 
 pub struct WhittedIntegrator {
     camera: Camera,
     sampler: Samplers,
-    max_depth: u32
+    max_depth: u32,
 }
 
 impl Integrator for WhittedIntegrator {
@@ -67,9 +97,14 @@ impl Integrator for WhittedIntegrator {
         let seed = py * IMAGE_WIDTH + px;
         Samplers::start_pixel(&mut self.sampler, &Point2::new(px as i32, py as i32));
         loop {
-            let (p_film, time, p_lens) = self.sampler.get_camera_sample(&Point2::new(px as i32, py as i32));
+            let (p_film, time, p_lens) = self
+                .sampler
+                .get_camera_sample(&Point2::new(px as i32, py as i32));
             // TODO: Allow lenses to change the weighting of ray based on lens
-            let ray = self.camera.get_ray(p_film.x / (IMAGE_WIDTH as f64), p_film.y / (IMAGE_HEIGHT as f64));
+            let ray = self.camera.get_ray(
+                p_film.x / (IMAGE_WIDTH as f64),
+                p_film.y / (IMAGE_HEIGHT as f64),
+            );
             let color = self.li(ray, self.max_depth);
             util::increment_color(grid, y as usize, x as usize, &color);
             if self.sampler.start_next_sample() == false {
@@ -78,8 +113,12 @@ impl Integrator for WhittedIntegrator {
         }
     }
 
-    fn get_sampler(&mut self) -> &mut Samplers { &mut self.sampler }
-    fn init(&mut self) { self.preprocess(); }
+    fn get_sampler(&mut self) -> &mut Samplers {
+        &mut self.sampler
+    }
+    fn init(&mut self) {
+        self.preprocess();
+    }
 }
 
 impl SamplerIntegrator for WhittedIntegrator {
@@ -93,7 +132,7 @@ impl SamplerIntegrator for WhittedIntegrator {
             for light in lights {
                 ans = ans + light.le(&ray);
             }
-            return ans
+            return ans;
         }
         let mut record = record.unwrap();
         ans = record.le(&record.wo);
@@ -121,14 +160,18 @@ impl SamplerIntegrator for WhittedIntegrator {
 
 impl WhittedIntegrator {
     pub fn make_whitted_integrator(camera: Camera, sampler: Samplers, max_depth: u32) -> Self {
-        Self { camera, sampler, max_depth }
+        Self {
+            camera,
+            sampler,
+            max_depth,
+        }
     }
 }
 
 pub struct BasicIntegrator {
     camera: Camera,
     sampler: Samplers,
-    max_depth: u32
+    max_depth: u32,
 }
 
 impl Integrator for BasicIntegrator {
@@ -145,13 +188,19 @@ impl Integrator for BasicIntegrator {
         }
     }
 
-    fn get_sampler(&mut self) -> &mut Samplers { &mut self.sampler }
+    fn get_sampler(&mut self) -> &mut Samplers {
+        &mut self.sampler
+    }
     fn init(&mut self) {}
 }
 
 impl BasicIntegrator {
     pub fn make_basic_integrator(camera: Camera, sampler: Samplers, max_depth: u32) -> Self {
-        Self { camera, sampler, max_depth }
+        Self {
+            camera,
+            sampler,
+            max_depth,
+        }
     }
 }
 
@@ -160,7 +209,7 @@ struct DirectLightingIntegrator {
     sampler: Samplers,
     max_depth: u32,
     n_light_samples: Vec<u32>,
-    strategy: LightStrategy
+    strategy: LightStrategy,
 }
 
 impl Integrator for DirectLightingIntegrator {
@@ -170,9 +219,14 @@ impl Integrator for DirectLightingIntegrator {
         let seed = py * IMAGE_WIDTH + px;
         Samplers::start_pixel(&mut self.sampler, &Point2::new(px as i32, py as i32));
         loop {
-            let (p_film, time, p_lens) = self.sampler.get_camera_sample(&Point2::new(px as i32, py as i32));
+            let (p_film, time, p_lens) = self
+                .sampler
+                .get_camera_sample(&Point2::new(px as i32, py as i32));
             // TODO: Allow lenses to change the weighting of ray based on lens
-            let ray = self.camera.get_ray(p_film.x / (IMAGE_WIDTH as f64), p_film.y / (IMAGE_HEIGHT as f64));
+            let ray = self.camera.get_ray(
+                p_film.x / (IMAGE_WIDTH as f64),
+                p_film.y / (IMAGE_HEIGHT as f64),
+            );
             let color = self.li(ray, self.max_depth);
             util::increment_color(grid, y as usize, x as usize, &color);
             if self.sampler.start_next_sample() == false {
@@ -181,8 +235,12 @@ impl Integrator for DirectLightingIntegrator {
         }
     }
 
-    fn get_sampler(&mut self) -> &mut Samplers { &mut self.sampler }
-    fn init(&mut self) { self.preprocess(); }
+    fn get_sampler(&mut self) -> &mut Samplers {
+        &mut self.sampler
+    }
+    fn init(&mut self) {
+        self.preprocess();
+    }
 }
 
 impl SamplerIntegrator for DirectLightingIntegrator {
@@ -190,7 +248,8 @@ impl SamplerIntegrator for DirectLightingIntegrator {
         let lights = &get_objects().lights;
         if self.strategy == LightStrategy::UniformAll {
             for light in lights {
-                self.n_light_samples.push(self.sampler.round_count(light.get_n_samples()));
+                self.n_light_samples
+                    .push(self.sampler.round_count(light.get_n_samples()));
             }
         }
     }
@@ -203,7 +262,7 @@ impl SamplerIntegrator for DirectLightingIntegrator {
             for light in lights {
                 ans = ans + light.le(&ray);
             }
-            return ans
+            return ans;
         }
         let mut record = record.unwrap();
         let wo = &record.wo;
@@ -213,7 +272,13 @@ impl SamplerIntegrator for DirectLightingIntegrator {
         let lights = &get_objects().lights;
         if lights.len() > 0 {
             if self.strategy == LightStrategy::UniformAll {
-                ans = ans + uniform_sample_all_lights(&record, &mut self.sampler, &self.n_light_samples, false);
+                ans = ans
+                    + uniform_sample_all_lights(
+                        &record,
+                        &mut self.sampler,
+                        &self.n_light_samples,
+                        false,
+                    );
             } else {
                 ans = ans + uniform_sample_one_light(&record, &mut self.sampler, false);
             }
@@ -227,8 +292,20 @@ impl SamplerIntegrator for DirectLightingIntegrator {
 }
 
 impl DirectLightingIntegrator {
-    pub fn make_direct_lighting(camera: Camera, sampler: Samplers, max_depth: u32, n_light_samples: Vec<u32>, strategy: LightStrategy) -> Self {
-        Self { camera, sampler, max_depth, n_light_samples, strategy }
+    pub fn make_direct_lighting(
+        camera: Camera,
+        sampler: Samplers,
+        max_depth: u32,
+        n_light_samples: Vec<u32>,
+        strategy: LightStrategy,
+    ) -> Self {
+        Self {
+            camera,
+            sampler,
+            max_depth,
+            n_light_samples,
+            strategy,
+        }
     }
 }
 
@@ -236,7 +313,7 @@ struct PathIntegrator {
     camera: Camera,
     sampler: Samplers,
     max_depth: u32,
-    invisible_light: bool
+    invisible_light: bool,
 }
 
 impl Integrator for PathIntegrator {
@@ -246,9 +323,14 @@ impl Integrator for PathIntegrator {
         let seed = py * IMAGE_WIDTH + px;
         Samplers::start_pixel(&mut self.sampler, &Point2::new(px as i32, py as i32));
         loop {
-            let (p_film, time, p_lens) = self.sampler.get_camera_sample(&Point2::new(px as i32, py as i32));
+            let (p_film, time, p_lens) = self
+                .sampler
+                .get_camera_sample(&Point2::new(px as i32, py as i32));
             // TODO: Allow lenses to change the weighting of ray based on lens
-            let ray = self.camera.get_ray(p_film.x / (IMAGE_WIDTH as f64), p_film.y / (IMAGE_HEIGHT as f64));
+            let ray = self.camera.get_ray(
+                p_film.x / (IMAGE_WIDTH as f64),
+                p_film.y / (IMAGE_HEIGHT as f64),
+            );
             let color = self.li(ray, self.max_depth);
             util::increment_color(grid, y as usize, x as usize, &color);
             if self.sampler.start_next_sample() == false {
@@ -257,12 +339,16 @@ impl Integrator for PathIntegrator {
         }
     }
 
-    fn get_sampler(&mut self) -> &mut Samplers { &mut self.sampler }
-    fn init(&mut self) { self.preprocess() }
+    fn get_sampler(&mut self) -> &mut Samplers {
+        &mut self.sampler
+    }
+    fn init(&mut self) {
+        self.preprocess()
+    }
 }
 
 impl SamplerIntegrator for PathIntegrator {
-    fn preprocess(&mut self) { }
+    fn preprocess(&mut self) {}
 
     fn li(&mut self, mut ray: Ray, depth: u32) -> Vector3<f64> {
         // beta represents the weight of the path generated thus far:
@@ -279,7 +365,8 @@ impl SamplerIntegrator for PathIntegrator {
             // find next vertex of current path
             let op_record = geometry::get_intersection(&ray);
             let is_some = op_record.is_some();
-            let mut record = op_record.unwrap_or_else(|| HitRecord::make_basic(Point3::new(0f64, 0f64, 0f64), 0f64));
+            let mut record = op_record
+                .unwrap_or_else(|| HitRecord::make_basic(Point3::new(0f64, 0f64, 0f64), 0f64));
             // can usually ignore intersection with emissive object because we
             // send a shadow ray, but if the first ray from a camera hits a light
             // or the previous bounce is specular, then we are unable to sample
@@ -293,7 +380,7 @@ impl SamplerIntegrator for PathIntegrator {
                         } else {
                             l = l + record.le(&-ray.dir).component_mul(&beta);
                         }
-                    }                        
+                    }
                 } else {
                     for light in lights {
                         l = l + light.le(&ray).component_mul(&beta);
@@ -307,7 +394,8 @@ impl SamplerIntegrator for PathIntegrator {
             let arena = Bump::new();
             Material::compute_scattering(&mut record, &arena, RADIANCE, true);
             // compute contribution from light
-            l = l + uniform_sample_one_light(&record, &mut self.sampler, false).component_mul(&beta);
+            l = l + uniform_sample_one_light(&record, &mut self.sampler, false)
+                .component_mul(&beta);
             let wo = -ray.dir;
             // compute direction of next vertex
             let (f, wi, pdf, flags) = record.bsdf.sample_f(&wo, &self.sampler.get_2d(), BSDF_ALL);
@@ -315,10 +403,12 @@ impl SamplerIntegrator for PathIntegrator {
                 break;
             }
             // update weight
-            beta = beta.component_mul(&f).scale(wi.dot(&record.shading.n).abs() / pdf);
+            beta = beta
+                .component_mul(&f)
+                .scale(wi.dot(&record.shading.n).abs() / pdf);
             specular_bounce = (flags & BSDF_SPECULAR) != 0;
             ray = record.spawn_ray(&wi);
-            
+
             // russian roulette for breaking
             if bounces > 3 {
                 let q = 0.05f64.max(1f64 - beta.x.max(beta.y.max(beta.z)));
@@ -334,12 +424,27 @@ impl SamplerIntegrator for PathIntegrator {
 }
 
 impl PathIntegrator {
-    pub fn make_path(camera: Camera, invisible_light: bool, sampler: Samplers, max_depth: u32) -> Self {
-        Self { camera, invisible_light, sampler, max_depth }
+    pub fn make_path(
+        camera: Camera,
+        invisible_light: bool,
+        sampler: Samplers,
+        max_depth: u32,
+    ) -> Self {
+        Self {
+            camera,
+            invisible_light,
+            sampler,
+            max_depth,
+        }
     }
 }
 
-fn specular_reflect(integrator: &mut dyn SamplerIntegrator, ray: Ray, hit_record: &HitRecord, depth: u32) -> Vector3<f64> {
+fn specular_reflect(
+    integrator: &mut dyn SamplerIntegrator,
+    ray: Ray,
+    hit_record: &HitRecord,
+    depth: u32,
+) -> Vector3<f64> {
     let sampler = integrator.get_sampler();
     let wo = hit_record.wo;
     let bxdf_type = BSDF_REFLECTION | BSDF_SPECULAR;
@@ -349,12 +454,19 @@ fn specular_reflect(integrator: &mut dyn SamplerIntegrator, ray: Ray, hit_record
 
     if pdf > 0f64 && color != util::black() && ns.dot(&wi).abs() != 0f64 {
         let new_ray = hit_record.spawn_ray(&wi);
-        return color.component_mul(&integrator.li(new_ray, depth - 1)).scale(ns.dot(&wi).abs() / pdf);
+        return color
+            .component_mul(&integrator.li(new_ray, depth - 1))
+            .scale(ns.dot(&wi).abs() / pdf);
     }
     util::black()
 }
 
-fn specular_transmit(integrator: &mut dyn SamplerIntegrator, ray: Ray, hit_record: &HitRecord, depth: u32) -> Vector3<f64> {
+fn specular_transmit(
+    integrator: &mut dyn SamplerIntegrator,
+    ray: Ray,
+    hit_record: &HitRecord,
+    depth: u32,
+) -> Vector3<f64> {
     let sampler = integrator.get_sampler();
     let wo = hit_record.wo;
     let bxdf_type = BSDF_TRANSMISSION | BSDF_SPECULAR;
@@ -362,12 +474,19 @@ fn specular_transmit(integrator: &mut dyn SamplerIntegrator, ray: Ray, hit_recor
     let ns = hit_record.shading.n;
     if pdf > 0f64 && color != util::black() && ns.dot(&wi).abs() != 0f64 {
         let new_ray = hit_record.spawn_ray(&wi);
-        return color.component_mul(&integrator.li(new_ray, depth - 1)).scale(ns.dot(&wi).abs() / pdf);
+        return color
+            .component_mul(&integrator.li(new_ray, depth - 1))
+            .scale(ns.dot(&wi).abs() / pdf);
     }
     util::black()
 }
 
-fn uniform_sample_all_lights(record: &HitRecord, sampler: &mut Samplers, n_samples: &[u32], handle_media: bool) -> Vector3<f64> {
+fn uniform_sample_all_lights(
+    record: &HitRecord,
+    sampler: &mut Samplers,
+    n_samples: &[u32],
+    handle_media: bool,
+) -> Vector3<f64> {
     let handle_media = false; // TODO: media
     let mut ans = util::black();
     for j in 0usize..get_objects().lights.len() {
@@ -375,9 +494,10 @@ fn uniform_sample_all_lights(record: &HitRecord, sampler: &mut Samplers, n_sampl
         let samples = n_samples[j];
         let mut ld = util::black();
         // for _ in 0..samples {
-            let u_light = sampler.get_2d(); // TODO request array ahead of time
-            let u_scatter = sampler.get_2d();
-            ld = ld + estimate_direct_default(record, &u_scatter, light, &u_light, sampler, handle_media);
+        let u_light = sampler.get_2d(); // TODO request array ahead of time
+        let u_scatter = sampler.get_2d();
+        ld = ld
+            + estimate_direct_default(record, &u_scatter, light, &u_light, sampler, handle_media);
         // }
         // ld = ld.scale(1f64 / (samples as f64));
         ans = ans + ld;
@@ -385,7 +505,11 @@ fn uniform_sample_all_lights(record: &HitRecord, sampler: &mut Samplers, n_sampl
     ans
 }
 
-fn uniform_sample_one_light(record: &HitRecord, sampler: &mut Samplers, handle_media: bool) -> Vector3<f64> {
+fn uniform_sample_one_light(
+    record: &HitRecord,
+    sampler: &mut Samplers,
+    handle_media: bool,
+) -> Vector3<f64> {
     let handle_media = false;
     // choose single light to sample
     let lights = &get_objects().lights;
@@ -399,10 +523,26 @@ fn uniform_sample_one_light(record: &HitRecord, sampler: &mut Samplers, handle_m
     let u_scattering = sampler.get_2d();
     // weird stat magic, somehow E[f(x) + g(x)] = E[2f(x)] on average or something?
     // that's why we multiply by n_lights
-    estimate_direct_default(record, &u_scattering, light, &u_light, sampler, handle_media).scale(n_lights as f64)
+    estimate_direct_default(
+        record,
+        &u_scattering,
+        light,
+        &u_light,
+        sampler,
+        handle_media,
+    )
+    .scale(n_lights as f64)
 }
 
-fn estimate_direct(record: &HitRecord, u_scatter: &Point2<f64>, light: &Light, u_light: &Point2<f64>, sampler: &mut Samplers, handle_media: bool, specular: bool) -> Vector3<f64> {
+fn estimate_direct(
+    record: &HitRecord,
+    u_scatter: &Point2<f64>,
+    light: &Light,
+    u_light: &Point2<f64>,
+    sampler: &mut Samplers,
+    handle_media: bool,
+    specular: bool,
+) -> Vector3<f64> {
     let bsdf_flags = if specular {
         BSDF_ALL
     } else {
@@ -414,7 +554,8 @@ fn estimate_direct(record: &HitRecord, u_scatter: &Point2<f64>, light: &Light, u
     // if we get a successful sample from the light distribution, then we evaluate the BSDF
     // to determine the actual contribution of light
     if light_pdf > 0f64 && color != util::black() {
-        let f: Vector3<f64> = record.bsdf.f(&record.wo, &wi, bsdf_flags) * wi.dot(&record.shading.n).abs();
+        let f: Vector3<f64> =
+            record.bsdf.f(&record.wo, &wi, bsdf_flags) * wi.dot(&record.shading.n).abs();
         scattering_pdf = record.bsdf.pdf(&record.wo, &wi, bsdf_flags);
         if f != util::black() {
             // TODO: use handle_media
@@ -435,7 +576,8 @@ fn estimate_direct(record: &HitRecord, u_scatter: &Point2<f64>, light: &Light, u
     // Then, if there isn't a delta light, we sample_f on the bsdf to get an outgoing direction and
     // add the contribution of the light it hits (if any)
     if !light.is_delta_light() {
-        let (f, wi, scattering_pdf, sampled_type) = record.bsdf.sample_f(&record.wo, u_scatter, bsdf_flags);
+        let (f, wi, scattering_pdf, sampled_type) =
+            record.bsdf.sample_f(&record.wo, u_scatter, bsdf_flags);
         let f: Vector3<f64> = f * wi.dot(&record.shading.n).abs();
         let sampled_specular = (sampled_type & BSDF_SPECULAR) != 0;
         if f != util::black() && scattering_pdf > 0f64 {
@@ -469,8 +611,23 @@ fn estimate_direct(record: &HitRecord, u_scatter: &Point2<f64>, light: &Light, u
     ld
 }
 
-fn estimate_direct_default(record: &HitRecord, u_scatter: &Point2<f64>, light: &Light, u_light: &Point2<f64>, sampler: &mut Samplers, handle_media: bool) -> Vector3<f64> {
-    estimate_direct(record, u_scatter, light, u_light, sampler, handle_media, false)
+fn estimate_direct_default(
+    record: &HitRecord,
+    u_scatter: &Point2<f64>,
+    light: &Light,
+    u_light: &Point2<f64>,
+    sampler: &mut Samplers,
+    handle_media: bool,
+) -> Vector3<f64> {
+    estimate_direct(
+        record,
+        u_scatter,
+        light,
+        u_light,
+        sampler,
+        handle_media,
+        false,
+    )
 }
 
 fn power_heuristic(nf: i32, f_pdf: f64, ng: i32, g_pdf: f64) -> f64 {

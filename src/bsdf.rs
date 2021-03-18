@@ -1,9 +1,12 @@
 #![allow(dead_code)]
-use nalgebra::{geometry::Point2, base::{Unit, Vector3}};
 use crate::bxdf;
+use crate::consts::*;
 use crate::hittable::HitRecord;
 use crate::util;
-use crate::consts::*;
+use nalgebra::{
+    base::{Unit, Vector3},
+    geometry::Point2,
+};
 
 const EMPTY_ETA: f64 = -100.;
 
@@ -21,12 +24,26 @@ impl Bsdf {
     is not applicable, like for an opaque surface, pass a value of 1.
     */
     pub fn new(record: &HitRecord, eta: f64) -> Self {
-        Bsdf { eta, ns: record.shading.n, ng: record.n, ss: record.shading.dpdu, ts: Unit::new_normalize(record.shading.n.cross(&record.shading.dpdu)), bxdfs: vec![]}
+        Bsdf {
+            eta,
+            ns: record.shading.n,
+            ng: record.n,
+            ss: record.shading.dpdu,
+            ts: Unit::new_normalize(record.shading.n.cross(&record.shading.dpdu)),
+            bxdfs: vec![],
+        }
     }
 
     pub fn empty() -> Self {
         let n = Unit::new_normalize(util::white());
-        Self { eta: EMPTY_ETA, ns: n, ng: n, ss: n, ts: n, bxdfs: vec![]}
+        Self {
+            eta: EMPTY_ETA,
+            ns: n,
+            ng: n,
+            ss: n,
+            ts: n,
+            bxdfs: vec![],
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -52,9 +69,11 @@ impl Bsdf {
     }
 
     pub fn local_to_world(&self, v: &Vector3<f64>) -> Vector3<f64> {
-        Vector3::new(self.ss.x * v.x + self.ts.x * v.y + self.ns.x * v.z,
-                     self.ss.y * v.x + self.ts.y * v.y + self.ns.y * v.z,
-                        self.ss.z * v.x + self.ts.z * v.y + self.ns.z * v.z)
+        Vector3::new(
+            self.ss.x * v.x + self.ts.x * v.y + self.ns.x * v.z,
+            self.ss.y * v.x + self.ts.y * v.y + self.ns.y * v.z,
+            self.ss.z * v.x + self.ts.z * v.y + self.ns.z * v.z,
+        )
     }
 
     pub fn f_default(&self, wow: &Vector3<f64>, wiw: &Vector3<f64>) -> Vector3<f64> {
@@ -68,18 +87,24 @@ impl Bsdf {
         let mut f = util::black();
         for i in 0..self.bxdfs.len() {
             let b = self.bxdfs[i].as_ref();
-            if bxdf::matches_flags(b.get_type(), flags) &&
-                 ((reflect && (b.get_type() & BSDF_REFLECTION) > 0)) ||
-                 (!reflect && (b.get_type() & BSDF_TRANSMISSION) > 0) {
-                    f += bxdf::Bxdf::f(b, &wo, &wi);
+            if bxdf::matches_flags(b.get_type(), flags)
+                && (reflect && (b.get_type() & BSDF_REFLECTION) > 0)
+                || (!reflect && (b.get_type() & BSDF_TRANSMISSION) > 0)
+            {
+                f += bxdf::Bxdf::f(b, &wo, &wi);
             }
         }
         f
     }
 
     /** Returns color, new direction, pdf, type
-    */
-    pub fn sample_f(&self, wow: &Vector3<f64>, sample: &Point2<f64>, bxdf_type: u8) -> (Vector3<f64>, Vector3<f64>, f64, u8) {
+     */
+    pub fn sample_f(
+        &self,
+        wow: &Vector3<f64>,
+        sample: &Point2<f64>,
+        bxdf_type: u8,
+    ) -> (Vector3<f64>, Vector3<f64>, f64, u8) {
         let matching = self.num_components(bxdf_type);
         if matching == 0 {
             return (util::black(), util::black(), 0f64, 0u8);
@@ -108,7 +133,7 @@ impl Bsdf {
             return (util::black(), util::black(), 0f64, 0u8);
         }
         let wiw = self.local_to_world(&wi);
-        
+
         if (bxdf.get_type() & BSDF_SPECULAR) == 0 && matching > 1 {
             for index in 0..self.bxdfs.len() {
                 let b = self.bxdfs[index].as_ref();
@@ -120,20 +145,21 @@ impl Bsdf {
         if matching > 1 {
             pdf = pdf / matching as f64;
         }
-        
+
         if (bxdf::Bxdf::get_type(bxdf) & BSDF_SPECULAR) == 0 {
             let reflect = wiw.dot(&self.ng) * wow.dot(&self.ng) > 0.;
             color = Vector3::new(0., 0., 0.);
             for index in 0..self.bxdfs.len() {
                 let b = self.bxdfs[index].as_ref();
-                if bxdf::matches_flags(bxdf::Bxdf::get_type(b), bxdf_type) &&
-                ((reflect && (bxdf::Bxdf::get_type(b) & BSDF_REFLECTION) > 0) || 
-                ((!reflect && (bxdf::Bxdf::get_type(b) & BSDF_TRANSMISSION) > 0))) {
+                if bxdf::matches_flags(bxdf::Bxdf::get_type(b), bxdf_type)
+                    && ((reflect && (bxdf::Bxdf::get_type(b) & BSDF_REFLECTION) > 0)
+                        || (!reflect && (bxdf::Bxdf::get_type(b) & BSDF_TRANSMISSION) > 0))
+                {
                     color += bxdf::Bxdf::f(b, &wo, &wi);
                 }
             }
         }
-        
+
         (color, wiw, pdf, sampled_type)
     }
 

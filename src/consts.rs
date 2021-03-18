@@ -16,7 +16,8 @@ pub const BSDF_TRANSMISSION: u8 = 1 << 1;
 pub const BSDF_DIFFUSE: u8 = 1 << 2;
 pub const BSDF_GLOSSY: u8 = 1 << 3;
 pub const BSDF_SPECULAR: u8 = 1 << 4;
-pub const BSDF_ALL: u8 = BSDF_REFLECTION | BSDF_TRANSMISSION | BSDF_DIFFUSE | BSDF_GLOSSY | BSDF_SPECULAR;
+pub const BSDF_ALL: u8 =
+    BSDF_REFLECTION | BSDF_TRANSMISSION | BSDF_DIFFUSE | BSDF_GLOSSY | BSDF_SPECULAR;
 // constants for light types
 pub const DELTA_POSITION: u8 = 1 << 0;
 pub const DELTA_DIRECTION: u8 = 1 << 1;
@@ -34,7 +35,8 @@ pub const ONE_MINUS_EPSILON: f64 = 1f64 - std::f64::EPSILON / 2.;
 // Defined in terms of those above
 pub const IMAGE_HEIGHT: u32 = ((IMAGE_WIDTH as f64) / ASPECT_RATIO) as u32;
 pub const THREAD_UPDATE: u64 = RAYS_PER_THREAD / 200u64;
-pub const TOTAL_RAYS: u64 = (IMAGE_WIDTH as u64) * (IMAGE_HEIGHT as u64) * (SAMPLES_PER_PIXEL as u64);
+pub const TOTAL_RAYS: u64 =
+    (IMAGE_WIDTH as u64) * (IMAGE_HEIGHT as u64) * (SAMPLES_PER_PIXEL as u64);
 pub const RAYS_PER_THREAD: u64 = TOTAL_RAYS / (NUM_THREADS as u64);
 pub const INV_PI: f64 = 1f64 / PI;
 pub const INV_2PI: f64 = 1f64 / (2f64 * PI);

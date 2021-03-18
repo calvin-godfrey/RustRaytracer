@@ -1,14 +1,29 @@
-use nalgebra::base::{Vector3, Vector2, Unit};
-use nalgebra::geometry::{Projective3, Point3};
-use std::sync::Arc;
+use crate::consts::*;
 use crate::geometry::Ray;
 use crate::hittable::HitRecord;
 use crate::util;
-use crate::consts::*;
+use nalgebra::base::{Unit, Vector2, Vector3};
+use nalgebra::geometry::{Point3, Projective3};
+use std::sync::Arc;
 
 #[allow(unused_variables)]
-pub fn xy_rect_intersect(x0: f64, y0: f64, x1: f64, y1: f64, k: f64, mat_index: usize, transform: &Option<Arc<Projective3<f64>>>, ray: &Ray, t0: f64, t1: f64) -> Option<HitRecord> {
-    let transformed_ray: Ray = if transform.is_none() { *ray } else { ray.transform(transform.as_ref().unwrap()) };
+pub fn xy_rect_intersect(
+    x0: f64,
+    y0: f64,
+    x1: f64,
+    y1: f64,
+    k: f64,
+    mat_index: usize,
+    transform: &Option<Arc<Projective3<f64>>>,
+    ray: &Ray,
+    t0: f64,
+    t1: f64,
+) -> Option<HitRecord> {
+    let transformed_ray: Ray = if transform.is_none() {
+        *ray
+    } else {
+        ray.transform(transform.as_ref().unwrap())
+    };
     let dir = transformed_ray.dir;
     let origin = transformed_ray.origin;
     let time = transformed_ray.time;
@@ -21,7 +36,7 @@ pub fn xy_rect_intersect(x0: f64, y0: f64, x1: f64, y1: f64, k: f64, mat_index: 
     if x < x0 || y < y0 || x > x1 || y > y1 {
         return None;
     }
-    let uv = Vector2::new((x-x0)/(x1-x0), (y-y0)/(y1-y0));
+    let uv = Vector2::new((x - x0) / (x1 - x0), (y - y0) / (y1 - y0));
     let mut p = transformed_ray.at(t);
     let mut dpdu = Vector3::new(1., 0., 0.);
     let mut dpdv = Vector3::new(0., 1., 0.);
@@ -31,14 +46,40 @@ pub fn xy_rect_intersect(x0: f64, y0: f64, x1: f64, y1: f64, k: f64, mat_index: 
         dpdu = trans.transform_vector(&dpdu);
         dpdv = trans.transform_vector(&dpdv);
     }
-    let mut record = HitRecord::new(p, uv, -ray.dir, dpdu, dpdv, util::black(), util::black(), t, 0, mat_index);
+    let mut record = HitRecord::new(
+        p,
+        uv,
+        -ray.dir,
+        dpdu,
+        dpdv,
+        util::black(),
+        util::black(),
+        t,
+        0,
+        mat_index,
+    );
     record.set_front(&ray); // p and n were transformed to world space, so use the original ray
     Some(record)
 }
 
 #[allow(unused_variables)]
-pub fn xz_rect_intersect(x0: f64, z0: f64, x1: f64, z1: f64, k: f64, mat_index: usize, transform: &Option<Arc<Projective3<f64>>>, ray: &Ray, t0: f64, t1: f64) -> Option<HitRecord> {
-    let transformed_ray: Ray = if transform.is_none() { *ray } else { ray.transform(transform.as_ref().unwrap()) };
+pub fn xz_rect_intersect(
+    x0: f64,
+    z0: f64,
+    x1: f64,
+    z1: f64,
+    k: f64,
+    mat_index: usize,
+    transform: &Option<Arc<Projective3<f64>>>,
+    ray: &Ray,
+    t0: f64,
+    t1: f64,
+) -> Option<HitRecord> {
+    let transformed_ray: Ray = if transform.is_none() {
+        *ray
+    } else {
+        ray.transform(transform.as_ref().unwrap())
+    };
     let dir = transformed_ray.dir;
     let origin = transformed_ray.origin;
     let time = transformed_ray.time;
@@ -51,7 +92,7 @@ pub fn xz_rect_intersect(x0: f64, z0: f64, x1: f64, z1: f64, k: f64, mat_index: 
     if x < x0 || z < z0 || x > x1 || z > z1 {
         return None;
     }
-    let uv = Vector2::new((x-x0)/(x1-x0), (z-z0)/(z1-z0));
+    let uv = Vector2::new((x - x0) / (x1 - x0), (z - z0) / (z1 - z0));
     let mut p = transformed_ray.at(t);
     let mut dpdu = Vector3::new(1., 0., 0.);
     let mut dpdv = Vector3::new(0., 0., 1.);
@@ -61,14 +102,40 @@ pub fn xz_rect_intersect(x0: f64, z0: f64, x1: f64, z1: f64, k: f64, mat_index: 
         dpdu = trans.transform_vector(&dpdu);
         dpdv = trans.transform_vector(&dpdv);
     }
-    let mut record = HitRecord::new(p, uv, -ray.dir, dpdu, dpdv, util::black(), util::black(), t, 0, mat_index);
+    let mut record = HitRecord::new(
+        p,
+        uv,
+        -ray.dir,
+        dpdu,
+        dpdv,
+        util::black(),
+        util::black(),
+        t,
+        0,
+        mat_index,
+    );
     record.set_front(&ray);
     Some(record)
 }
 
 #[allow(unused_variables)]
-pub fn yz_rect_intersect(y0: f64, z0: f64, y1: f64, z1: f64, k: f64, mat_index: usize, transform: &Option<Arc<Projective3<f64>>>, ray: &Ray, t0: f64, t1: f64) -> Option<HitRecord> {
-    let transformed_ray: Ray = if transform.is_none() { *ray } else { ray.transform(transform.as_ref().unwrap()) };
+pub fn yz_rect_intersect(
+    y0: f64,
+    z0: f64,
+    y1: f64,
+    z1: f64,
+    k: f64,
+    mat_index: usize,
+    transform: &Option<Arc<Projective3<f64>>>,
+    ray: &Ray,
+    t0: f64,
+    t1: f64,
+) -> Option<HitRecord> {
+    let transformed_ray: Ray = if transform.is_none() {
+        *ray
+    } else {
+        ray.transform(transform.as_ref().unwrap())
+    };
     let dir = transformed_ray.dir;
     let origin = transformed_ray.origin;
     let time = transformed_ray.time;
@@ -81,7 +148,7 @@ pub fn yz_rect_intersect(y0: f64, z0: f64, y1: f64, z1: f64, k: f64, mat_index: 
     if y < y0 || z < z0 || y > y1 || z > z1 {
         return None;
     }
-    let uv = Vector2::new((y-y0)/(y1-y0), (z-z0)/(z1-z0));
+    let uv = Vector2::new((y - y0) / (y1 - y0), (z - z0) / (z1 - z0));
     let mut p = transformed_ray.at(t);
     let mut dpdu = Vector3::new(0., 1., 0.);
     let mut dpdv = Vector3::new(0., 0., 1.);
@@ -91,12 +158,30 @@ pub fn yz_rect_intersect(y0: f64, z0: f64, y1: f64, z1: f64, k: f64, mat_index: 
         dpdu = trans.transform_vector(&dpdu);
         dpdv = trans.transform_vector(&dpdv);
     }
-    let mut record = HitRecord::new(p, uv, -ray.dir, dpdu, dpdv, util::black(), util::black(), t, 0, mat_index);
+    let mut record = HitRecord::new(
+        p,
+        uv,
+        -ray.dir,
+        dpdu,
+        dpdv,
+        util::black(),
+        util::black(),
+        t,
+        0,
+        mat_index,
+    );
     record.set_front(&ray);
     Some(record)
 }
 
-pub fn sphere_intersect(center: &Point3<f64>, r: &f64, mat_index: usize, ray: &Ray, tmin: f64, tmax: f64) -> Option<HitRecord> {
+pub fn sphere_intersect(
+    center: &Point3<f64>,
+    r: &f64,
+    mat_index: usize,
+    ray: &Ray,
+    tmin: f64,
+    tmax: f64,
+) -> Option<HitRecord> {
     let diff: Vector3<f64> = ray.origin - center;
     // get quadratic equation, calculate discriminant
     let a = ray.dir.dot(&ray.dir);
@@ -149,7 +234,8 @@ fn make_sphere_record(t: f64, r: f64, mat_index: usize, ray: &Ray) -> HitRecord 
     let cos_phi = p.x * inv_z_r;
     let sin_phi = p.y * inv_z_r;
     let dpdu = Vector3::new(-phi_max * p.y, phi_max * p.x, 0.);
-    let dpdv = (theta_max - theta_min) * Vector3::new(p.z * cos_phi, p.z * sin_phi, -r * theta.sin());
+    let dpdv =
+        (theta_max - theta_min) * Vector3::new(p.z * cos_phi, p.z * sin_phi, -r * theta.sin());
     // big linear algebra
     let d2pduu = -phi_max * phi_max * Vector3::new(p.x, p.y, 0.);
     let d2pduv = (theta_max - theta_min) * p.z * phi_max * Vector3::new(-sin_phi, cos_phi, 0.);
@@ -161,7 +247,7 @@ fn make_sphere_record(t: f64, r: f64, mat_index: usize, ray: &Ray) -> HitRecord 
     let e = N.dot(&d2pduu);
     let f = N.dot(&d2pduv);
     let g = N.dot(&d2pdvv);
-    let inv_egf2= 1f64 / (E * G - F * F);
+    let inv_egf2 = 1f64 / (E * G - F * F);
     let dndu = (f * F - e * G) * inv_egf2 * dpdu + (e * F - f * E) * inv_egf2 * dpdv;
     let dndv = (g * F - f * G) * inv_egf2 * dpdu + (f * F - g * E) * inv_egf2 * dpdv;
     // fill out hitrecord

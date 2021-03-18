@@ -1,14 +1,19 @@
-use image::RgbImage;
-use std::{collections::HashSet, sync::{Arc, Mutex}, thread};
 use crate::consts::*;
-use crate::integrator::{get_integrator, IntType};
 use crate::geometry::Camera;
+use crate::integrator::{get_integrator, IntType};
 use crate::sampler::Samplers;
 use crate::util;
+use image::RgbImage;
+use std::{
+    collections::HashSet,
+    sync::{Arc, Mutex},
+    thread,
+};
 
 pub fn tile_multithread(path: String, camera: Camera, sampler: Samplers, int_type: IntType) {
     let img = RgbImage::new(IMAGE_WIDTH, IMAGE_HEIGHT);
-    let pixels: Vec<Vec<(f64, f64, f64, u32)>> = util::make_empty_image(IMAGE_HEIGHT as usize, IMAGE_WIDTH as usize);
+    let pixels: Vec<Vec<(f64, f64, f64, u32)>> =
+        util::make_empty_image(IMAGE_HEIGHT as usize, IMAGE_WIDTH as usize);
     let pixels_mutex: Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>> = Arc::new(Mutex::new(pixels));
     let image_arc: Arc<Mutex<image::RgbImage>> = Arc::new(Mutex::new(img));
     let mut thread_vec: Vec<thread::JoinHandle<()>> = Vec::new();
@@ -40,7 +45,7 @@ pub fn tile_multithread(path: String, camera: Camera, sampler: Samplers, int_typ
                 let mut tx: u32 = 0;
                 let mut ty: u32 = 0;
                 let mut done = false;
-                
+
                 // look for a tile that hasn't been started yet
                 'outer: for i in 0..tiles.len() {
                     for j in 0..tiles[i].len() {
@@ -54,7 +59,8 @@ pub fn tile_multithread(path: String, camera: Camera, sampler: Samplers, int_typ
                         }
                     }
                 }
-                if !done { // all tiles are taken
+                if !done {
+                    // all tiles are taken
                     break;
                 }
                 drop(tiles); // no longer need to hold the lock
@@ -70,10 +76,14 @@ pub fn tile_multithread(path: String, camera: Camera, sampler: Samplers, int_typ
                             break;
                         }
 
-
                         img_integrator.render(&mut local_img, px, py);
                         let finished_pixel = local_img[y as usize][x as usize];
-                        util::thread_safe_write_pixel(&pixels_clone, py as usize, px as usize, finished_pixel);
+                        util::thread_safe_write_pixel(
+                            &pixels_clone,
+                            py as usize,
+                            px as usize,
+                            finished_pixel,
+                        );
                     }
                 }
                 // acquire tiles lock and mark tile as completed
@@ -97,7 +107,8 @@ pub fn tile_multithread(path: String, camera: Camera, sampler: Samplers, int_typ
             let tiles = tile_progress.lock().unwrap();
             for i in 0..tiles.len() {
                 for j in 0..tiles[i].len() {
-                    if tiles[i][j] == 0 { // in progress
+                    if tiles[i][j] == 0 {
+                        // in progress
                         changed_tiles.insert((j, i));
                     }
                 }
@@ -113,7 +124,8 @@ pub fn tile_multithread(path: String, camera: Camera, sampler: Samplers, int_typ
             drop(pixels_guard);
             drop(tiles);
             util::thread_safe_draw_picture(&img_clone, &pixels_mutex, &changed_tiles, &path[..]);
-            if changed_tiles.len() == 0 { // none of the pixels have changed, so we're done
+            if changed_tiles.len() == 0 {
+                // none of the pixels have changed, so we're done
                 break;
             }
         }

@@ -1,21 +1,22 @@
-use tobj;
-use nalgebra::geometry::{Projective3, Point3};
-use nalgebra::base::{Vector2, Vector3};
-use crate::hittable;
-use crate::material::materials::{Texture};
 use crate::consts::*;
+use crate::hittable;
+use crate::material::materials::Texture;
+use nalgebra::base::{Vector2, Vector3};
+use nalgebra::geometry::{Point3, Projective3};
+use tobj;
 
 #[allow(unused_variables)]
 pub fn parse_obj(path: &str, trans: Projective3<f64>) -> hittable::Mesh {
-    let obj_res: Result<(Vec<tobj::Model>, Vec<tobj::Material>), tobj::LoadError> = tobj::load_obj(path, true);
+    let obj_res: Result<(Vec<tobj::Model>, Vec<tobj::Material>), tobj::LoadError> =
+        tobj::load_obj(path, true);
     let mut ind: Vec<usize> = Vec::new();
     let mut p: Vec<Point3<f64>> = Vec::new();
     let mut n: Vec<Vector3<f64>> = Vec::new();
     let mut uv: Vec<Vector2<f64>> = Vec::new();
 
-    let mut min: Point3<f64> = Point3::new(INFINITY, INFINITY,  INFINITY);
+    let mut min: Point3<f64> = Point3::new(INFINITY, INFINITY, INFINITY);
     let mut max: Point3<f64> = Point3::new(-INFINITY, -INFINITY, -INFINITY);
-    
+
     match obj_res {
         Ok((models, mats)) => {
             let model: &tobj::Model = &models[0];
@@ -60,14 +61,26 @@ pub fn parse_obj(path: &str, trans: Projective3<f64>) -> hittable::Mesh {
             if let Some(id) = mesh.material_id {
                 // let mesh_mat: &tobj::Material = &mats[id]; // TODO: use this
                 // materials.push(mat);
-                let new_mesh = hittable::Mesh { ind, p, n, uv, bounding_box: bbox };
+                let new_mesh = hittable::Mesh {
+                    ind,
+                    p,
+                    n,
+                    uv,
+                    bounding_box: bbox,
+                };
                 return new_mesh;
             } else {
                 // materials.push(mat);
-                let new_mesh = hittable::Mesh { ind, p, n, uv, bounding_box: bbox };
+                let new_mesh = hittable::Mesh {
+                    ind,
+                    p,
+                    n,
+                    uv,
+                    bounding_box: bbox,
+                };
                 return new_mesh;
             }
-        },
+        }
         Err(_) => {
             panic!("Failed to parse obj {}", path);
         }
