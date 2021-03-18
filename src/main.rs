@@ -1,14 +1,8 @@
 use consts::*;
-use glium::{
-    backend::Facade, texture::RawImage2d, uniforms::MagnifySamplerFilter,
-    uniforms::MinifySamplerFilter, uniforms::SamplerBehavior, Display, Texture2d,
-};
 use imgui::{im_str, ImString, TextureId, Textures, Window};
-use imgui_glium_renderer::Texture;
-use imgui_support::System;
 use integrator::IntType;
 use scenes::*;
-use std::{io::Cursor, rc::Rc, time::SystemTime};
+use std::time::SystemTime;
 
 mod bsdf;
 mod bxdf;
@@ -46,21 +40,20 @@ impl Default for State {
 }
 
 fn main() {
-    let mut system = imgui_support::init(file!());
+    let system = imgui_support::init(file!());
     let mut state = State::default();
-
-    system.add_img(&"material.png"[..]);
 
     // system.main_loop(move |run, ui| ui.show_demo_window(run));
 
-    system.main_loop(move |_, ui| {
+    system.main_loop(move |_, ui, renderer, display| {
         Window::new(im_str!("hello world"))
             .size([330.0, 110.0], imgui::Condition::FirstUseEver)
             .position([0f32, 0f32], imgui::Condition::FirstUseEver)
             .build(ui, || {
                 ui.input_text(im_str!("File path"), &mut state.path).build();
                 if ui.small_button(im_str!("Submit file")) {
-                    // system.add_img(state.path.to_str());
+                    imgui_support::add_img(state.path.to_str(), renderer, display);
+                    state.has_image = true;
                 }
                 ui.separator();
                 let mouse_pos = ui.io().mouse_pos;

@@ -1,13 +1,19 @@
-use glium::{Texture2d, backend::Facade, glutin, texture::RawImage2d, uniforms::{MagnifySamplerFilter, MinifySamplerFilter, SamplerBehavior}};
 use glium::glutin::event::{Event, WindowEvent};
 use glium::glutin::event_loop::{ControlFlow, EventLoop};
 use glium::glutin::window::WindowBuilder;
+use glium::{
+    backend::Facade,
+    glutin,
+    texture::RawImage2d,
+    uniforms::{MagnifySamplerFilter, MinifySamplerFilter, SamplerBehavior},
+    Texture2d,
+};
 use glium::{Display, Surface};
 use imgui::{Context, FontConfig, FontGlyphRanges, FontSource, TextureId, Textures, Ui};
 use imgui_glium_renderer::{Renderer, Texture};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
-use std::{path::Path, rc::Rc};
 use std::time::Instant;
+use std::{path::Path, rc::Rc};
 
 mod clipboard;
 
@@ -84,10 +90,13 @@ pub fn init(title: &str) -> System {
 }
 
 impl System {
-    pub fn main_loop<F: FnMut(&mut bool, &mut Ui) + 'static>(self, mut run_ui: F) {
+    pub fn main_loop<F>(self, mut run_ui: F)
+    where
+        F: FnMut(&mut bool, &mut Ui, &mut Renderer, &mut glium::Display) + 'static,
+    {
         let System {
             event_loop,
-            display,
+            mut display,
             mut imgui,
             mut platform,
             mut renderer,
@@ -112,7 +121,7 @@ impl System {
                 let mut ui = imgui.frame();
 
                 let mut run = true;
-                run_ui(&mut run, &mut ui);
+                run_ui(&mut run, &mut ui, &mut renderer, &mut display);
                 if !run {
                     *control_flow = ControlFlow::Exit;
                 }
@@ -137,28 +146,27 @@ impl System {
             }
         });
     }
-   
+}
 
-    pub fn add_img(&mut self, path: &str) -> TextureId {
-        let textures: &mut Textures<Texture> = &mut self.renderer.textures();
-        let res_img = image::open(path);
-        match res_img {
-            Ok(image) => {
-                let image = image.to_rgba8();
-                let dimensions = image.dimensions();
-                let texture = RawImage2d::from_raw_rgba(image.into_raw(), dimensions);
-                let gl_texture = Texture2d::new(self.display.get_context(), texture).unwrap();
-                let texture = imgui_glium_renderer::Texture {
-                    texture: Rc::new(gl_texture),
-                    sampler: SamplerBehavior {
-                        magnify_filter: MagnifySamplerFilter::Linear,
-                        minify_filter: MinifySamplerFilter::Linear,
-                        ..Default::default()
-                    },
-                };
-                textures.insert(texture)
-            }
-            Err(_) => TextureId::new(usize::MAX),
+pub fn add_img(path: &str, renderer: &mut Renderer, display: &mut glium::Display) -> TextureId {
+    let textures: &mut Textures<Texture> = &mut renderer.textures();
+    let res_img = image::open(path);
+    match res_img {
+        Ok(image) => {
+            let image = image.to_rgba8();
+            let dimensions = image.dimensions();
+            let texture = RawImage2d::from_raw_rgba(image.into_raw(), dimensions);
+            let gl_texture = Texture2d::new(display.get_context(), texture).unwrap();
+            let texture = imgui_glium_renderer::Texture {
+                texture: Rc::new(gl_texture),
+                sampler: SamplerBehavior {
+                    magnify_filter: MagnifySamplerFilter::Linear,
+                    minify_filter: MinifySamplerFilter::Linear,
+                    ..Default::default()
+                },
+            };
+            textures.insert(texture)
         }
+        Err(_) => TextureId::new(usize::MAX),
     }
-     }
+}
