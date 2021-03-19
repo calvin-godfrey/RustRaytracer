@@ -8,7 +8,7 @@ pub const MAX_DEPTH: u32 = 25;
 pub const NUM_THREADS: u32 = 6;
 pub const AMBIENT_LIGHT: bool = true;
 pub const TILE_SIZE: u32 = 16;
-pub const UPDATE_PICTURE_FREQUENCY: u64 = 1;
+pub const UPDATE_PICTURE_FREQUENCY: f64 = 0.05;
 pub const TONE_MAPPING: bool = true;
 // BxDF type constants
 pub const BSDF_REFLECTION: u8 = 1 << 0;

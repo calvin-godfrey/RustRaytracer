@@ -126,9 +126,9 @@ impl Camera {
         t0: f64,
         t1: f64,
     ) -> Self {
-        let w: Unit<Vector3<f64>> = Unit::new_normalize(from - to);
-        let u: Unit<Vector3<f64>> = Unit::new_normalize(Matrix::cross(&up, &w));
-        let v: Unit<Vector3<f64>> = Unit::new_normalize(Matrix::cross(&w, &u));
+        let w: Unit<Vector3<f64>> = Unit::new_normalize(to - from);
+        let u: Unit<Vector3<f64>> = -Unit::new_normalize(Matrix::cross(&up, &w));
+        let v: Unit<Vector3<f64>> = -Unit::new_normalize(Matrix::cross(&w, &u));
 
         let theta = vfov * PI / 180.;
         let h = (theta / 2.).tan();
@@ -141,7 +141,7 @@ impl Camera {
         // this is the point in world space that represents the bottom left corner of the plane that is being projected onto
         let upper_left_corner: Point3<f64> = origin - horizontal_offset.scale(0.5)
             + vertical_offset.scale(0.5)
-            - w.as_ref().scale(focus_dist);
+            + w.as_ref().scale(focus_dist);
 
         let lens_radius = aperture / 2.;
 
@@ -172,6 +172,24 @@ impl Camera {
             dir - offset,
             util::rand_range(self.t0, self.t1),
         );
+    }
+
+    pub fn translate(&self, tx: f64, ty: f64, tz: f64) -> Camera {
+        let fx = self.w.scale(tx);
+        let fy = self.u.scale(ty);
+        let fz = self.v.scale(tz);
+        Camera {
+            origin: self.origin + fx + fy + fz,
+            upper_left_corner: self.upper_left_corner + 2f64 * fx + fy + fz,
+            horizontal_offset: self.horizontal_offset,
+            vertical_offset: self.vertical_offset,
+            lens_radius: self.lens_radius,
+            u: self.u,
+            v: self.v,
+            w: self.w,
+            t0: self.t0,
+            t1: self.t1,
+        }
     }
 }
 

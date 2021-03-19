@@ -5,7 +5,7 @@ use nalgebra::{
     geometry::{Point2, Point3, Projective3},
     Matrix3,
 };
-use rand::distributions::{Standard, Uniform};
+use rand::distributions::Uniform;
 use rand::prelude::*;
 use std::{
     collections::HashSet,
@@ -493,10 +493,6 @@ pub fn get_sky(ray: &geometry::Ray) -> Vector3<f64> {
         color[1] as f64 * INV_COL_MAX,
         color[2] as f64 * INV_COL_MAX,
     );
-}
-
-pub fn get_background(_ray: &geometry::Ray) -> Vector3<f64> {
-    Vector3::new(0., 0., 0.)
 }
 
 pub fn get_new_box(

@@ -1,12 +1,12 @@
-use crate::consts::*;
 use crate::geometry::Camera;
 use crate::integrator::{get_integrator, IntType};
 use crate::sampler::Samplers;
 use crate::util;
+use crate::{consts::*, STOP_RENDER};
 use image::RgbImage;
 use std::{
     collections::HashSet,
-    sync::{Arc, Mutex},
+    sync::{atomic::Ordering, Arc, Mutex},
     thread,
 };
 
@@ -102,7 +102,9 @@ pub fn tile_multithread(path: String, camera: Camera, sampler: Samplers, int_typ
         let mut local_img = util::make_empty_image(IMAGE_HEIGHT as usize, IMAGE_WIDTH as usize);
         let mut changed_tiles: HashSet<(usize, usize)>;
         loop {
-            thread::sleep(std::time::Duration::from_secs(UPDATE_PICTURE_FREQUENCY));
+            thread::sleep(std::time::Duration::from_millis(
+                (UPDATE_PICTURE_FREQUENCY * 1000.0) as u64,
+            ));
             changed_tiles = HashSet::new(); // reset the tiles
             let tiles = tile_progress.lock().unwrap();
             for i in 0..tiles.len() {
@@ -144,7 +146,7 @@ pub fn progressive_multithread(path: String, camera: Camera, sampler: Samplers, 
     let image_arc: Arc<Mutex<image::RgbImage>> = Arc::new(Mutex::new(img));
     let mut thread_vec: Vec<thread::JoinHandle<()>> = Vec::new();
 
-    for j in 0..NUM_THREADS {
+    for _ in 0..NUM_THREADS {
         let camera_clone = camera.clone();
         let sampler_clone = sampler.clone();
         let int_type_clone = int_type.clone();
@@ -153,7 +155,8 @@ pub fn progressive_multithread(path: String, camera: Camera, sampler: Samplers, 
         thread_vec.push(thread::spawn(move || {
             let mut img_integrator = get_integrator(int_type_clone, camera_clone, sampler_clone);
             img_integrator.init();
-            let mut local_img: Vec<Vec<(f64, f64, f64, u32)>> = util::make_empty_image(IMAGE_HEIGHT as usize, IMAGE_WIDTH as usize);
+            let mut local_img: Vec<Vec<(f64, f64, f64, u32)>> =
+                util::make_empty_image(IMAGE_HEIGHT as usize, IMAGE_WIDTH as usize);
             for ray_num in 0..(RAYS_PER_THREAD) {
                 let px = (util::rand() * IMAGE_WIDTH as f64) as u32;
                 let py = (util::rand() * IMAGE_HEIGHT as f64) as u32;
@@ -161,6 +164,10 @@ pub fn progressive_multithread(path: String, camera: Camera, sampler: Samplers, 
                 if ray_num % THREAD_UPDATE == 0 {
                     util::thread_safe_update_image(&pixels_clone, &local_img);
                     local_img = util::make_empty_image(IMAGE_HEIGHT as usize, IMAGE_WIDTH as usize);
+                    if STOP_RENDER.load(Ordering::Relaxed) {
+                        // static AtomicBool in main
+                        break;
+                    }
                 }
             }
         }));
@@ -173,7 +180,9 @@ pub fn progressive_multithread(path: String, camera: Camera, sampler: Samplers, 
         let mut local_img = util::make_empty_image(IMAGE_HEIGHT as usize, IMAGE_WIDTH as usize);
         loop {
             let mut update = false;
-            thread::sleep(std::time::Duration::from_secs(UPDATE_PICTURE_FREQUENCY));
+            thread::sleep(std::time::Duration::from_millis(
+                (UPDATE_PICTURE_FREQUENCY * 1000.0) as u64,
+            ));
             let pixels_guard = pixels_mutex.lock().unwrap();
             for i in 0..IMAGE_HEIGHT {
                 for j in 0..IMAGE_WIDTH {
@@ -195,4 +204,7 @@ pub fn progressive_multithread(path: String, camera: Camera, sampler: Samplers, 
     for handle in thread_vec {
         handle.join().unwrap();
     }
+
+    println!("Done");
+    STOP_RENDER.store(false, Ordering::Relaxed);
 }

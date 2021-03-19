@@ -433,6 +433,12 @@ pub enum Samplers {
     },
 }
 
+impl Default for Samplers {
+    fn default() -> Self {
+        Samplers::new_zero_two_sequence_sampler(SAMPLES_PER_PIXEL.into(), 0)
+    }
+}
+
 impl Clone for Samplers {
     fn clone(&self) -> Self {
         match self {

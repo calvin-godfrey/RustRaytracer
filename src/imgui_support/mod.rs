@@ -9,11 +9,14 @@ use glium::{
     Texture2d,
 };
 use glium::{Display, Surface};
+use image::RgbImage;
 use imgui::{Context, FontConfig, FontGlyphRanges, FontSource, TextureId, Textures, Ui};
 use imgui_glium_renderer::{Renderer, Texture};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use std::time::Instant;
 use std::{path::Path, rc::Rc};
+
+use crate::consts::*;
 
 mod clipboard;
 
@@ -128,7 +131,7 @@ impl System {
 
                 let gl_window = display.gl_window();
                 let mut target = display.draw();
-                target.clear_color_srgb(1.0, 1.0, 1.0, 1.0);
+                target.clear_color_srgb(0.0, 0.0, 0.0, 1.0);
                 platform.prepare_render(&ui, gl_window.window());
                 let draw_data = ui.render();
                 renderer
@@ -167,7 +170,12 @@ pub fn add_img(path: &str, renderer: &mut Renderer, display: &mut glium::Display
             };
             textures.insert(texture)
         }
-        Err(_) => TextureId::new(usize::MAX),
+        Err(_) => {
+            // if the file doesn't already exist, then create it
+            let img = RgbImage::new(IMAGE_WIDTH, IMAGE_HEIGHT);
+            img.save(path).unwrap();
+            add_img(path, renderer, display)
+        }
     }
 }
 
@@ -191,6 +199,6 @@ pub fn refresh_img(path: &str, renderer: &mut Renderer, display: &mut glium::Dis
             textures.replace(TextureId::new(0), texture);
             true
         }
-        Err(_) => false
+        Err(_) => false,
     }
 }
