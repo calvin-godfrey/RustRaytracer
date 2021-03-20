@@ -39,6 +39,20 @@ pub fn get_objects_mut() -> &'static mut Objects {
     unsafe { &mut OBJECTS }
 }
 
+pub fn clear_objects() {
+    // this is only ever used to switch between scenes in the UI
+    unsafe { OBJECTS = Objects {
+        meshes: Vec::new(),
+        objs: Vec::new(),
+        lights: Vec::new(),
+        materials: Vec::new(),
+        textures: Vec::new(),
+        node: BvhNode::Empty,
+        max_bvh: std::i32::MAX,
+    };
+    }
+}
+
 #[derive(Copy, Clone)]
 pub struct ONB {
     axis: [Unit<Vector3<f64>>; 3],

@@ -35,6 +35,7 @@ mod imgui_support;
 #[derive(Clone)]
 struct State {
     path: ImString,
+    scene: usize,
     has_image: bool,
     camera: Camera,
     in_progress: bool,
@@ -45,6 +46,7 @@ impl Default for State {
     fn default() -> Self {
         Self {
             path: ImString::with_capacity(128),
+            scene: 0,
             has_image: false,
             camera: Camera::new(
                 Point3::new(0f64, 0f64, 0f64),
@@ -75,13 +77,15 @@ pub fn make_frontend() {
     state.camera = camera;
     state.sampler = sampler;
 
-    // system.main_loop(move |run, ui, renderer, display| ui.show_demo_window(run));
+    // system.main_loop(move |run, ui, _, _| ui.show_demo_window(run));
 
     system.main_loop(move |_, ui, renderer, display| {
+        let mut curr_scene: usize = state.scene;
         Window::new(im_str!("Path Tracer"))
             .size([330.0, 110.0], imgui::Condition::FirstUseEver)
             .position([0f32, 0f32], imgui::Condition::FirstUseEver)
             .build(ui, || {
+                curr_scene = state.scene; // (potentially) update scene number
                 ui.input_text(im_str!("File path"), &mut state.path).build();
                 if ui.small_button(im_str!("Submit file")) {
                     imgui_support::add_img(state.path.to_str(), renderer, display);
@@ -93,6 +97,15 @@ pub fn make_frontend() {
                 //     "Mouse position: ({:.1},{:.1})",
                 //     mouse_pos[0], mouse_pos[1]
                 // ));
+                imgui::ComboBox::new(im_str!("Select starter scene")).build_simple_string(
+                    ui,
+                    &mut state.scene,
+                    &[
+                        im_str!("Plastic ball"),
+                        im_str!("Cornell box"),
+                        im_str!("Box with metal statue"),
+                    ],
+                );
                 if ui.small_button(im_str!("Start")) && !state.in_progress {
                     state.in_progress = true;
                     start_render(state.path.to_string(), state.camera, state.sampler.clone());
@@ -107,28 +120,52 @@ pub fn make_frontend() {
             // stop render, update camera, restart render. No need
             // to update in_progress because it is barely not in progress
             if keys[70] {
-                STOP_RENDER.store(true, Ordering::Relaxed);
+                stop_threads(&state);
                 state.camera = state.camera.translate(0f64, -0.2f64, 0f64);
-                while STOP_RENDER.load(Ordering::Relaxed) {}
                 start_render(state.path.to_string(), state.camera, state.sampler.clone());
             }
             if keys[71] {
-                STOP_RENDER.store(true, Ordering::Relaxed);
+                stop_threads(&state);
                 state.camera = state.camera.translate(0.2f64, 0f64, 0f64);
-                while STOP_RENDER.load(Ordering::Relaxed) {}
                 start_render(state.path.to_string(), state.camera, state.sampler.clone());
             }
             if keys[72] {
-                STOP_RENDER.store(true, Ordering::Relaxed);
+                stop_threads(&state);
                 state.camera = state.camera.translate(0f64, 0.2f64, 0f64);
-                while STOP_RENDER.load(Ordering::Relaxed) {}
                 start_render(state.path.to_string(), state.camera, state.sampler.clone());
             }
             if keys[73] {
-                STOP_RENDER.store(true, Ordering::Relaxed);
+                stop_threads(&state);
                 state.camera = state.camera.translate(-0.2f64, 0f64, 0f64);
-                while STOP_RENDER.load(Ordering::Relaxed) {}
                 start_render(state.path.to_string(), state.camera, state.sampler.clone());
+            }
+            if state.scene != curr_scene {
+                // dropdown selection changed
+                stop_threads(&state);
+                geometry::clear_objects();
+                match state.scene {
+                    0 => {
+                        let (_, camera, sampler) = material_hdr();
+                        state.camera = camera;
+                        state.sampler = sampler;
+                    }
+                    1 => {
+                        let (_, camera, sampler) = cornell_box();
+                        state.camera = camera;
+                        state.sampler = sampler;
+                    }
+                    2 => {
+                        let (_, camera, sampler) = cornell_box_statue();
+                        state.camera = camera;
+                        state.sampler = sampler;
+                    }
+                    _ => {
+                        panic!("Unknown scene");
+                    }
+                }
+                if state.in_progress {
+                    start_render(state.path.to_string(), state.camera, state.sampler.clone());
+                }
             }
             Window::new(im_str!("Render:"))
                 .size([720f32, 720f32], imgui::Condition::FirstUseEver)
@@ -186,4 +223,11 @@ fn start_render(path: String, camera: Camera, sampler: Samplers) {
             Err(_) => {}
         }
     });
+}
+
+fn stop_threads(state: &State) {
+    if state.in_progress {
+        STOP_RENDER.store(true, Ordering::Relaxed);
+        while STOP_RENDER.load(Ordering::Relaxed) {}
+    }
 }

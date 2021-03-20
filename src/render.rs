@@ -146,24 +146,97 @@ pub fn progressive_multithread(path: String, camera: Camera, sampler: Samplers, 
     let image_arc: Arc<Mutex<image::RgbImage>> = Arc::new(Mutex::new(img));
     let mut thread_vec: Vec<thread::JoinHandle<()>> = Vec::new();
 
+    // do a single ray tile-wise to make sure every pixel gets hit at least once
+    let num_tiles_wide = (IMAGE_WIDTH) / TILE_SIZE + 1;
+    let num_tiles_tall = (IMAGE_HEIGHT) / TILE_SIZE + 1;
+    let mut started_tiles: Vec<Vec<i32>> = Vec::new();
+    for i in 0..num_tiles_tall {
+        started_tiles.push(Vec::new());
+        for _ in 0..num_tiles_wide {
+            started_tiles[i as usize].push(-1);
+        }
+    }
+    let tiles_arc: Arc<Mutex<Vec<Vec<i32>>>> = Arc::new(Mutex::new(started_tiles));
+
     for _ in 0..NUM_THREADS {
         let camera_clone = camera.clone();
         let sampler_clone = sampler.clone();
         let int_type_clone = int_type.clone();
         let pixels_clone = Arc::clone(&pixels_mutex);
+        let tiles_clone = Arc::clone(&tiles_arc);
+
 
         thread_vec.push(thread::spawn(move || {
             let mut img_integrator = get_integrator(int_type_clone, camera_clone, sampler_clone);
             img_integrator.init();
-            let mut local_img: Vec<Vec<(f64, f64, f64, u32)>> =
-                util::make_empty_image(IMAGE_HEIGHT as usize, IMAGE_WIDTH as usize);
-            for ray_num in 0..(RAYS_PER_THREAD) {
-                let px = (util::rand() * IMAGE_WIDTH as f64) as u32;
-                let py = (util::rand() * IMAGE_HEIGHT as f64) as u32;
-                img_integrator.single_sample(&mut local_img, px, py);
-                if ray_num % THREAD_UPDATE == 0 {
-                    util::thread_safe_update_image(&pixels_clone, &local_img);
-                    local_img = util::make_empty_image(IMAGE_HEIGHT as usize, IMAGE_WIDTH as usize);
+            let mut local_img: Vec<Vec<(f64, f64, f64, u32)>>;
+            let mut stop = false;
+
+            loop {
+                let mut tiles = tiles_clone.lock().unwrap();
+                let mut tx: u32 = 0;
+                let mut ty: u32 = 0;
+                let mut done = false;
+
+                // look for a tile that hasn't been started yet
+                'outer: for i in 0..tiles.len() {
+                    for j in 0..tiles[i].len() {
+                        if tiles[i][j] == -1 {
+                            // if a tile hasn't been started, record its data and mark it as started
+                            tx = j as u32;
+                            ty = i as u32;
+                            tiles[i][j] = 0;
+                            done = true;
+                            break 'outer;
+                        }
+                    }
+                }
+                if !done {
+                    // all tiles are taken
+                    break;
+                }
+                drop(tiles); // no longer need to hold the lock
+                let mut local_img: Vec<Vec<(f64, f64, f64, u32)>> = util::make_empty_image(16, 16);
+                for y in 0..TILE_SIZE {
+                    for x in 0..TILE_SIZE {
+                        stop = STOP_RENDER.load(Ordering::Relaxed);
+                        if stop { break; }
+                        let px = tx * TILE_SIZE + x;
+                        let py = ty * TILE_SIZE + y;
+                        if py >= IMAGE_HEIGHT {
+                            continue;
+                        }
+                        if px >= IMAGE_WIDTH {
+                            break;
+                        }
+
+                        img_integrator.single_sample(&mut local_img, px, py);
+                        let finished_pixel = local_img[y as usize][x as usize];
+                        util::thread_safe_write_pixel(
+                            &pixels_clone,
+                            py as usize,
+                            px as usize,
+                            finished_pixel,
+                        );
+                    }
+                    if stop { break; }
+                }
+                // acquire tiles lock and mark tile as completed
+                let mut after_tiles = tiles_clone.lock().unwrap();
+                after_tiles[ty as usize][tx as usize] = 1;
+                drop(after_tiles);
+                if stop { break; }
+            }
+            local_img = util::make_empty_image(IMAGE_HEIGHT as usize, IMAGE_WIDTH as usize);
+            if !stop {
+                for ray_num in 0..(RAYS_PER_THREAD) {
+                    let px = (util::rand() * IMAGE_WIDTH as f64) as u32;
+                    let py = (util::rand() * IMAGE_HEIGHT as f64) as u32;
+                    img_integrator.single_sample(&mut local_img, px, py);
+                    if ray_num % THREAD_UPDATE == 0 {
+                        util::thread_safe_update_image(&pixels_clone, &local_img);
+                        local_img = util::make_empty_image(IMAGE_HEIGHT as usize, IMAGE_WIDTH as usize);
+                    }
                     if STOP_RENDER.load(Ordering::Relaxed) {
                         // static AtomicBool in main
                         break;
@@ -205,6 +278,5 @@ pub fn progressive_multithread(path: String, camera: Camera, sampler: Samplers, 
         handle.join().unwrap();
     }
 
-    println!("Done");
     STOP_RENDER.store(false, Ordering::Relaxed);
 }
