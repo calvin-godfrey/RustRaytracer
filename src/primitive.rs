@@ -487,9 +487,7 @@ impl Primitive {
             Primitive::Triangle {
                 mesh_index,
                 ind,
-                bounding_box,
-                mat_index,
-                light_index,
+                ..
             } => {
                 let meshes = &get_objects().meshes;
                 let mesh = &meshes[*mesh_index];

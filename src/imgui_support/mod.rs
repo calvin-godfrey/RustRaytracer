@@ -16,7 +16,7 @@ use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use std::time::Instant;
 use std::{path::Path, rc::Rc};
 
-use crate::consts::*;
+use crate::GLOBAL_STATE;
 
 mod clipboard;
 
@@ -38,7 +38,7 @@ pub fn init(title: &str) -> System {
     let context = glutin::ContextBuilder::new().with_vsync(true);
     let builder = WindowBuilder::new()
         .with_title(title.to_owned())
-        .with_inner_size(glutin::dpi::LogicalSize::new(1024f64, 768f64));
+        .with_inner_size(glutin::dpi::LogicalSize::new(1920f64, 1080f64));
     let display =
         Display::new(builder, context, &event_loop).expect("Failed to initialize display");
 
@@ -152,6 +152,11 @@ impl System {
 }
 
 pub fn add_img(path: &str, renderer: &mut Renderer, display: &mut glium::Display) -> TextureId {
+    let img = RgbImage::new(
+        GLOBAL_STATE.get_image_width(),
+        GLOBAL_STATE.get_image_height(),
+    );
+    img.save(path).unwrap();
     let textures: &mut Textures<Texture> = &mut renderer.textures();
     let res_img = image::open(path);
     match res_img {
@@ -172,9 +177,7 @@ pub fn add_img(path: &str, renderer: &mut Renderer, display: &mut glium::Display
         }
         Err(_) => {
             // if the file doesn't already exist, then create it
-            let img = RgbImage::new(IMAGE_WIDTH, IMAGE_HEIGHT);
-            img.save(path).unwrap();
-            add_img(path, renderer, display)
+            panic!("Unable to find file")
         }
     }
 }

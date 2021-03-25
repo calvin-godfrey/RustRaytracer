@@ -1,5 +1,5 @@
 #![allow(unused_variables, dead_code)]
-use crate::consts::*;
+use crate::{consts::*, GLOBAL_STATE};
 use nalgebra::geometry::Point2;
 use rand::prelude::*;
 
@@ -435,7 +435,7 @@ pub enum Samplers {
 
 impl Default for Samplers {
     fn default() -> Self {
-        Samplers::new_zero_two_sequence_sampler(SAMPLES_PER_PIXEL.into(), 0)
+        Samplers::new_zero_two_sequence_sampler(GLOBAL_STATE.get_samples_per_pixel().into(), 0)
     }
 }
 

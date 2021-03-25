@@ -1,6 +1,5 @@
 use crate::consts::*;
 use crate::hittable;
-use crate::material::materials::Texture;
 use nalgebra::base::{Vector2, Vector3};
 use nalgebra::geometry::{Point3, Projective3};
 use tobj;

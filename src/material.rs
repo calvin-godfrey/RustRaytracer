@@ -12,10 +12,7 @@ pub mod materials {
     use nalgebra::base::Vector3;
     use nalgebra::geometry::{Point2, Point3};
     use std::fs::File;
-    use std::{
-        io::{BufRead, BufReader},
-        sync::Arc,
-    };
+    use std::{io::BufReader, sync::Arc};
 
     pub enum Material {
         Matte {

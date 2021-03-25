@@ -250,7 +250,7 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub fn new(path: &str, trans: Projective3<f64>, id: usize) -> Self {
+    pub fn new(path: &str, trans: Projective3<f64>, _id: usize) -> Self {
         parser::parse_obj(path, trans)
     }
 

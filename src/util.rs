@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use hittable::HitRecord;
 use image::{Rgb, RgbImage};
 use nalgebra::base::{Unit, Vector2, Vector3};
@@ -12,10 +13,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::consts::*;
 use crate::geometry;
 use crate::hittable;
 use crate::primitive::Primitive;
+use crate::{consts::*, GLOBAL_STATE};
 
 pub fn gradient(from: &Rgb<u8>, to: &Rgb<u8>, scale: f64) -> Rgb<u8> {
     let r: u8 = ((1.0 - scale) * from[0] as f64 + (scale * (to[0] as f64))) as u8;
@@ -24,7 +25,6 @@ pub fn gradient(from: &Rgb<u8>, to: &Rgb<u8>, scale: f64) -> Rgb<u8> {
     Rgb([r, g, b])
 }
 
-#[allow(dead_code)]
 pub fn clamp(x: f64, min: f64, max: f64) -> f64 {
     x.max(min).min(max)
 }
@@ -93,7 +93,6 @@ pub fn concentric_sample_disk(u: &Point2<f64>) -> Point2<f64> {
     Point2::new(r * theta.cos(), r * theta.sin())
 }
 
-#[allow(dead_code)]
 pub fn rand_in_hemisphere(normal: &Vector3<f64>) -> Vector3<f64> {
     let vec: Vector3<f64> = uniform_sample_sphere(&Point2::new(rand(), rand()));
     if normal.dot(&vec) > 0. {
@@ -232,7 +231,6 @@ pub fn increment_color(
     arr[i % height][j % width].3 += 1;
 }
 
-#[allow(dead_code)]
 pub fn thread_safe_write_pixel(
     arr: &Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>>,
     i: usize,
@@ -258,7 +256,6 @@ pub fn thread_safe_write_pixel(
     data[i][j].3 += color.3;
 }
 
-#[allow(dead_code)]
 pub fn thread_safe_increment_color(
     arr: &Arc<Mutex<Vec<Vec<(f64, f64, f64, u32)>>>>,
     i: usize,
@@ -289,8 +286,8 @@ pub fn thread_safe_update_image(
     local: &Vec<Vec<(f64, f64, f64, u32)>>,
 ) {
     let mut data = arr.lock().unwrap();
-    for i in 0usize..IMAGE_HEIGHT as usize {
-        for j in 0usize..IMAGE_WIDTH as usize {
+    for i in 0usize..GLOBAL_STATE.get_image_height() as usize {
+        for j in 0usize..GLOBAL_STATE.get_image_width() as usize {
             let (r, g, b, n) = local[i][j];
             data[i][j].0 += r;
             data[i][j].1 += g;
@@ -387,7 +384,6 @@ pub fn refract(vec: &Vector3<f64>, n: &Unit<Vector3<f64>>, eta: f64) -> Option<V
     return Some(eta * -vec + (eta * cos_theta_i - cos_theta_t) * Vector3::new(n.x, n.y, n.z));
 }
 
-#[allow(dead_code)]
 pub fn draw_picture(image: &mut RgbImage, pixels: &Vec<Vec<(f64, f64, f64, u32)>>, path: &String) {
     for i in 0..image.height() {
         let w = i as usize;
@@ -482,7 +478,6 @@ pub fn mix_f(from: f64, to: f64, x: f64) -> f64 {
     from * (1f64 - x) + to * x
 }
 
-#[allow(dead_code)]
 pub fn get_sky(ray: &geometry::Ray) -> Vector3<f64> {
     let white = Rgb([255u8, 255u8, 255u8]);
     let blue = Rgb([140u8, 159u8, 185u8]);
@@ -533,7 +528,6 @@ pub fn make_empty_image(height: usize, width: usize) -> Vec<Vec<(f64, f64, f64, 
     pixels
 }
 
-#[allow(dead_code)]
 fn box_compare(a: &Primitive, b: &Primitive, axis: usize) -> std::cmp::Ordering {
     let box_a = Primitive::get_bounding_box(a, 0., 0.);
     let box_b = Primitive::get_bounding_box(b, 0., 0.);
@@ -560,15 +554,12 @@ fn box_compare(a: &Primitive, b: &Primitive, axis: usize) -> std::cmp::Ordering 
     }
 }
 
-#[allow(dead_code)]
 pub fn box_x_compare(a: &Primitive, b: &Primitive) -> std::cmp::Ordering {
     box_compare(a, b, 0)
 }
-#[allow(dead_code)]
 pub fn box_y_compare(a: &Primitive, b: &Primitive) -> std::cmp::Ordering {
     box_compare(a, b, 1)
 }
-#[allow(dead_code)]
 pub fn box_z_compare(a: &Primitive, b: &Primitive) -> std::cmp::Ordering {
     box_compare(a, b, 2)
 }

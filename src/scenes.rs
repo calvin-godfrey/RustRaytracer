@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-use crate::consts::*;
 use crate::geometry;
 use crate::geometry::Camera;
 use crate::hittable::*;
@@ -8,6 +7,7 @@ use crate::material::materials::{Material, Texture};
 use crate::primitive::Primitive;
 use crate::sampler::Samplers;
 use crate::util;
+use crate::{consts::*, GLOBAL_STATE};
 use nalgebra::base::{Matrix4, Vector3};
 use nalgebra::geometry::{Point3, Projective3, Rotation3, Similarity3};
 use std::sync::Arc;
@@ -18,7 +18,7 @@ use std::sync::Arc;
 //     let to: Point3<f64> = Point3::new(0., 0., 0.0);
 //     let up: Vector3<f64> = Vector3::new(0., 1., 0.);
 
-//     let camera = geometry::Camera::new(from, to, up, ASPECT_RATIO, 20., 0.16, 10.);
+//     let camera = geometry::Camera::new(from, to, up, GLOBAL_STATE.get_aspect_ratio(), 20., 0.16, 10.);
 
 //     let objects = geometry::get_objects_mut();
 
@@ -91,8 +91,17 @@ pub fn cornell_box() -> (String, Camera, Samplers) {
     let to = Point3::new(278., 278., 0.);
     let up = Vector3::new(0., 1., 0.);
 
-    let camera =
-        geometry::Camera::new_motion_blur(from, to, up, ASPECT_RATIO, 40., 0., 10., 0., 1.);
+    let camera = geometry::Camera::new_motion_blur(
+        from,
+        to,
+        up,
+        GLOBAL_STATE.get_aspect_ratio(),
+        40.,
+        0.,
+        10.,
+        0.,
+        1.,
+    );
 
     let objects = geometry::get_objects_mut();
     objects
@@ -182,7 +191,8 @@ pub fn cornell_box() -> (String, Camera, Samplers) {
     let mut indices: Vec<usize> = (0usize..len).collect();
     let node = BvhNode::new(&objects.objs, &mut indices, 0, len, 0., 1.);
     objects.node = node;
-    let sampler = Samplers::new_zero_two_sequence_sampler(SAMPLES_PER_PIXEL.into(), 0);
+    let sampler =
+        Samplers::new_zero_two_sequence_sampler(GLOBAL_STATE.get_samples_per_pixel().into(), 0);
     ("cornell_box.png".to_string(), camera, sampler)
 }
 
@@ -192,8 +202,17 @@ pub fn cornell_box_statue() -> (String, Camera, Samplers) {
     let to = Point3::new(278., 278., 0.);
     let up = Vector3::new(0., 1., 0.);
 
-    let camera =
-        geometry::Camera::new_motion_blur(from, to, up, ASPECT_RATIO, 40., 0., 10., 0., 1.);
+    let camera = geometry::Camera::new_motion_blur(
+        from,
+        to,
+        up,
+        GLOBAL_STATE.get_aspect_ratio(),
+        40.,
+        0.,
+        10.,
+        0.,
+        1.,
+    );
 
     let objects = geometry::get_objects_mut();
     objects
@@ -282,7 +301,8 @@ pub fn cornell_box_statue() -> (String, Camera, Samplers) {
     let node = BvhNode::new(&objects.objs, &mut indices, 0, len, 0., 1.);
     objects.node = node;
     let path = format!("cornell_statue.png");
-    let sampler = Samplers::new_zero_two_sequence_sampler(SAMPLES_PER_PIXEL.into(), 0);
+    let sampler =
+        Samplers::new_zero_two_sequence_sampler(GLOBAL_STATE.get_samples_per_pixel().into(), 0);
     (path, camera, sampler)
 }
 
@@ -310,7 +330,8 @@ pub fn plastic_dragon() -> (String, Camera, Samplers) {
     let to: Point3<f64> = Point3::new(0., -0.15, -0.08);
     let up: Vector3<f64> = Vector3::new(0., 1., 0.);
 
-    let camera = geometry::Camera::new(from, to, up, ASPECT_RATIO, 70., 0.0, 10.);
+    let camera =
+        geometry::Camera::new(from, to, up, GLOBAL_STATE.get_aspect_ratio(), 70., 0.0, 10.);
 
     let light_gray = Vector3::new(0.4, 0.15, 0.15).scale(2.);
     let dark_gray = Vector3::new(0.15, 0.15, 0.4).scale(2.);
@@ -348,7 +369,8 @@ pub fn plastic_dragon() -> (String, Camera, Samplers) {
     let mut indices: Vec<usize> = (0usize..len).collect();
     let bvh = BvhNode::new(&world, &mut indices, 0, len, 0., 1.);
     objects.node = bvh;
-    let sampler = Samplers::new_zero_two_sequence_sampler(SAMPLES_PER_PIXEL.into(), 0);
+    let sampler =
+        Samplers::new_zero_two_sequence_sampler(GLOBAL_STATE.get_samples_per_pixel().into(), 0);
     ("plastic_dragon.png".to_string(), camera, sampler)
 }
 
@@ -369,7 +391,7 @@ pub fn plastic_dragon() -> (String, Camera, Samplers) {
 //     let to: Point3<f64> = Point3::new(0., -0.15, -0.08);
 //     let up: Vector3<f64> = Vector3::new(0., 1., 0.);
 
-//     let camera = geometry::Camera::new(from, to, up, ASPECT_RATIO, 70., 0.0, 10.);
+//     let camera = geometry::Camera::new(from, to, up, GLOBAL_STATE.get_aspect_ratio(), 70., 0.0, 10.);
 
 //     let light_gray = Vector3::new(0.4, 0.15, 0.15).scale(2.);
 //     let dark_gray = Vector3::new(0.15, 0.15, 0.4).scale(2.);
@@ -412,7 +434,7 @@ pub fn plastic_dragon() -> (String, Camera, Samplers) {
 //     let to: Point3<f64> = Point3::new(0., -0.15, -0.08);
 //     let up: Vector3<f64> = Vector3::new(0., 1., 0.);
 
-//     let camera = geometry::Camera::new(from, to, up, ASPECT_RATIO, 70., 0.0, 10.);
+//     let camera = geometry::Camera::new(from, to, up, GLOBAL_STATE.get_aspect_ratio(), 70., 0.0, 10.);
 
 //     let mut world: Vec<Primitive> = Vec::new();
 //     let mut texts: Vec<Texture> = Vec::new();
@@ -455,7 +477,8 @@ pub fn sphere_roughness() -> (String, Camera, Samplers) {
     let to: Point3<f64> = Point3::new(0., -0.15, -0.08);
     let up: Vector3<f64> = Vector3::new(0., 1., 0.);
 
-    let camera = geometry::Camera::new(from, to, up, ASPECT_RATIO, 70., 0.0, 10.);
+    let camera =
+        geometry::Camera::new(from, to, up, GLOBAL_STATE.get_aspect_ratio(), 70., 0.0, 10.);
 
     let world = &mut objects.objs;
     let texts = &mut objects.textures;
@@ -517,7 +540,8 @@ pub fn sphere_roughness() -> (String, Camera, Samplers) {
     let mut indices: Vec<usize> = (0usize..len).collect();
     let bvh = BvhNode::new(&world, &mut indices, 0, len, 0., 1.);
     objects.node = bvh;
-    let sampler = Samplers::new_zero_two_sequence_sampler(SAMPLES_PER_PIXEL.into(), 0);
+    let sampler =
+        Samplers::new_zero_two_sequence_sampler(GLOBAL_STATE.get_samples_per_pixel().into(), 0);
     ("metal_spheres.png".to_string(), camera, sampler)
 }
 
@@ -541,7 +565,8 @@ pub fn two_dragons() -> (String, Camera, Samplers) {
     let to: Point3<f64> = Point3::new(0., -0.15, -0.08);
     let up: Vector3<f64> = Vector3::new(0., 1., 0.);
 
-    let camera = geometry::Camera::new(from, to, up, ASPECT_RATIO, 60., 0.0, 10.);
+    let camera =
+        geometry::Camera::new(from, to, up, GLOBAL_STATE.get_aspect_ratio(), 60., 0.0, 10.);
 
     let world = &mut objects.objs;
     let texts = &mut objects.textures;
@@ -593,7 +618,8 @@ pub fn two_dragons() -> (String, Camera, Samplers) {
     let len = world.len();
     let mut indices: Vec<usize> = (0usize..len).collect();
     objects.node = BvhNode::new(&world, &mut indices, 0, len, 0., 1.);
-    let sampler = Samplers::new_zero_two_sequence_sampler(SAMPLES_PER_PIXEL.into(), 0);
+    let sampler =
+        Samplers::new_zero_two_sequence_sampler(GLOBAL_STATE.get_samples_per_pixel().into(), 0);
     ("two_dragons.png".to_string(), camera, sampler)
 }
 
@@ -609,7 +635,8 @@ pub fn material_hdr() -> (String, Camera, Samplers) {
     let dir = Vector3::new(-0.583445, -0.538765, -0.60772);
     let to = from + dir;
     let up = Vector3::new(-0.373123, 0.842456, -0.388647);
-    let camera = geometry::Camera::new(from, to, up, ASPECT_RATIO, 20., 0.0, 10.);
+    let camera =
+        geometry::Camera::new(from, to, up, GLOBAL_STATE.get_aspect_ratio(), 20., 0.0, 10.);
 
     texts.push(Texture::new_hdr("data/material/textures/envmap.hdr"));
     lights.push(Light::make_infinite_light(Projective3::identity(), 1, 0));
@@ -702,7 +729,8 @@ pub fn material_hdr() -> (String, Camera, Samplers) {
     let mut indices: Vec<usize> = (0usize..len).collect();
     let bvh = BvhNode::new(&world, &mut indices, 0, len, 0., 1.);
     objects.node = bvh;
-    let sampler = Samplers::new_zero_two_sequence_sampler(SAMPLES_PER_PIXEL.into(), 0);
+    let sampler =
+        Samplers::new_zero_two_sequence_sampler(GLOBAL_STATE.get_samples_per_pixel().into(), 0);
     ("material.png".to_string(), camera, sampler)
 }
 
