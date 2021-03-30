@@ -1,10 +1,10 @@
-use nalgebra::geometry::Point2;
 use crate::util;
+use nalgebra::geometry::Point2;
 
 pub struct Distribution1D {
     pub func: Vec<f64>, // function evaluated at `n` values
-    cdf: Vec<f64>, // cdf of function
-    pub func_int: f64 // integral of function
+    cdf: Vec<f64>,      // cdf of function
+    pub func_int: f64,  // integral of function
 }
 
 impl PartialEq for Distribution1D {
@@ -46,14 +46,20 @@ impl Distribution1D {
                 cdf[i] = cdf[i] / func_int;
             }
         }
-        Self { func, cdf, func_int }
+        Self {
+            func,
+            cdf,
+            func_int,
+        }
     }
 
-    pub fn count(&self) -> usize { self.func.len() }
+    pub fn count(&self) -> usize {
+        self.func.len()
+    }
 
     /**
-    * Returns value in [0, 1), pdf, and offset
-    */
+     * Returns value in [0, 1), pdf, and offset
+     */
     pub fn sample_continuous(&self, u: f64) -> (f64, f64, usize) {
         let offset = find_interval(self.cdf.len(), &|index| self.cdf[index] <= u);
         // given a pair that straddle u, we can linearly interpolate to find x
@@ -61,14 +67,18 @@ impl Distribution1D {
         if self.cdf[offset + 1] - self.cdf[offset] > 0f64 {
             du = du / (self.cdf[offset + 1] - self.cdf[offset]);
         }
-        let pdf = if self.func_int > 0f64 { self.func[offset] / self.func_int } else { 0f64 };
+        let pdf = if self.func_int > 0f64 {
+            self.func[offset] / self.func_int
+        } else {
+            0f64
+        };
         let x = (offset as f64 + du) / (self.count() as f64);
         (x, pdf, offset)
     }
 
     /**
-    * Returns offset, pdf, remapped u
-    */
+     * Returns offset, pdf, remapped u
+     */
     pub fn sample_discrete(&self, u: f64) -> (usize, f64, f64) {
         let offset = find_interval(self.cdf.len(), &|index| self.cdf[index] <= u);
         let pdf = self.discrete_pdf(offset);
@@ -113,7 +123,10 @@ impl Distribution2D {
         for v in 0..nv {
             marginal_func.push(p_cond_v[v].func_int);
         }
-        Self { p_cond_v, p_marginal: Distribution1D::make_distribution(&marginal_func) }
+        Self {
+            p_cond_v,
+            p_marginal: Distribution1D::make_distribution(&marginal_func),
+        }
     }
 
     /**
