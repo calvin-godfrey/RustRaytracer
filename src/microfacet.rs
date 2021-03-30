@@ -440,7 +440,7 @@ fn beckmann_sample_11(cos_theta_i: f64, u1: f64, u2: f64) -> Point2<f64> {
 }
 
 pub fn trowbridge_reitz_roughness_to_alpha(roughness: f64) -> f64 {
-    let roughness = roughness.max(1e-3);
+    let roughness = roughness.max(1e-5);
     let x = roughness.ln();
     1.62142 + 0.819955 * x + 0.1734 * x * x + 0.0171201 * x * x * x + 0.000640711 * x * x * x * x
 }

@@ -149,8 +149,11 @@ pub fn make_frontend() {
                     &mut state.scene,
                     &[
                         im_str!("Plastic ball"),
-                        im_str!("Cornell box"),
+                        im_str!("Rosegold metallic ball"),
+                        im_str!("Mirrored ball"),
+                        im_str!("Glass ball"),
                         im_str!("Box with metal statue"),
+                        im_str!("Teapot"),
                     ],
                 );
                 if ui.small_button(im_str!("Start")) && !state.in_progress {
@@ -320,17 +323,32 @@ fn stop_threads(state: &mut State) {
 fn rebuild_scene(state: &mut State) {
     match state.scene {
         0 => {
-            let (_, camera, sampler) = material_hdr();
+            let (_, camera, sampler) = material_hdr(0);
             state.camera = camera;
             state.sampler = sampler;
         }
         1 => {
-            let (_, camera, sampler) = cornell_box();
+            let (_, camera, sampler) = material_hdr(1);
             state.camera = camera;
             state.sampler = sampler;
         }
         2 => {
+            let (_, camera, sampler) = material_hdr(2);
+            state.camera = camera;
+            state.sampler = sampler;
+        }
+        3 => {
+            let (_, camera, sampler) = material_hdr(3);
+            state.camera = camera;
+            state.sampler = sampler;
+        }
+        4 => {
             let (_, camera, sampler) = cornell_box_statue();
+            state.camera = camera;
+            state.sampler = sampler;
+        }
+        5 => {
+            let (_, camera, sampler) = teapot_hdr();
             state.camera = camera;
             state.sampler = sampler;
         }

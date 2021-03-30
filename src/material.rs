@@ -426,6 +426,9 @@ pub mod materials {
             }
         }
 
+        /**
+        * k_r_id is reflection color, k_t_id is transmission color
+        */
         pub fn make_glass(
             k_r_id: usize,
             k_t_id: usize,

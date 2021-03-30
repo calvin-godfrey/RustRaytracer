@@ -624,7 +624,7 @@ pub fn two_dragons() -> (String, Camera, Samplers) {
 }
 
 #[allow(dead_code)]
-pub fn material_hdr() -> (String, Camera, Samplers) {
+pub fn material_hdr(mat_num: usize) -> (String, Camera, Samplers) {
     let objects = geometry::get_objects_mut();
     let texts = &mut objects.textures;
     let mats = &mut objects.materials;
@@ -695,7 +695,13 @@ pub fn material_hdr() -> (String, Camera, Samplers) {
     meshes.push(mesh1);
     meshes.push(mesh2);
     meshes.push(mesh0);
-    smooth_plastic(texts, mats);
+    match mat_num {
+        0 => smooth_plastic(texts, mats),
+        1 => rosegold_metal(texts, mats),
+        2 => mirror(texts, mats),
+        3 => glass(texts, mats),
+        _ => {}
+    }
     let len = texts.len();
     texts.push(Texture::new_solid_color(util::white().scale(0.2)));
     texts.push(Texture::new_solid_color(Vector3::new(0.325, 0.31, 0.325)));
@@ -734,6 +740,73 @@ pub fn material_hdr() -> (String, Camera, Samplers) {
     ("material.png".to_string(), camera, sampler)
 }
 
+#[allow(dead_code)]
+pub fn teapot_hdr() -> (String, Camera, Samplers) {
+    let objects = geometry::get_objects_mut();
+    let texts = &mut objects.textures;
+    let mats = &mut objects.materials;
+    let world = &mut objects.objs;
+    let meshes = &mut objects.meshes;
+    let lights = &mut objects.lights;
+    let from: Point3<f64> = Point3::new(23.895, 11.2207, 0.0400773);
+    let dir = Vector3::new(-0.939631, -0.342149, -0.00519335);
+    let to = from + dir;
+    let up = Vector3::new(-0.342144, 0.939646, -0.00189103);
+    let camera =
+        geometry::Camera::new(from, to, up, GLOBAL_STATE.get_aspect_ratio(), 35./2., 0.0, 10.);
+
+    texts.push(Texture::new_hdr("data/material/textures/envmap.hdr"));
+    lights.push(Light::make_infinite_light(Projective3::identity(), 1, 0));
+
+    let identity = Matrix4::identity();
+    let floor = Matrix4::new(
+        -39.9766, 39.9766, -1.74743e-006, 0f64, 4.94249e-006, 2.47125e-006, -56.5355, 0f64, -39.9766, -39.9766, -5.2423e-006, 0f64, 0f64, 0f64, 0f64, 1f64);
+    let identity_transform = Projective3::from_matrix_unchecked(identity);
+    let floor_transform = Projective3::from_matrix_unchecked(floor);
+    let lid = Mesh::new("data/teapot/models/Mesh000.obj", identity_transform, 0);
+    let body = Mesh::new("data/teapot/models/Mesh001.obj", identity_transform, 0);
+    meshes.push(lid);
+    meshes.push(body);
+    
+    let length = texts.len();
+    texts.push(Texture::new_solid_color(Vector3::new(0.9, 0.9, 0.9)));
+    texts.push(Texture::new_solid_color(util::white()));
+    mats.push(Material::make_plastic(length, length + 1, 0, 0.00001, true));
+
+    let len = texts.len();
+    texts.push(Texture::new_solid_color(util::white().scale(0.2)));
+    texts.push(Texture::new_solid_color(Vector3::new(0.325, 0.31, 0.325)));
+    texts.push(Texture::new_solid_color(Vector3::new(0.725, 0.71, 0.68)));
+    texts.push(Texture::new_checkered(len + 1, len + 2, 10f64));
+    mats.push(Material::make_matte(len, 0f64, 0));
+    mats.push(Material::make_matte(len + 3, 0f64, 0));
+
+    let triangles = Mesh::generate_triangles(meshes, 0, 0);
+    for tri in triangles {
+        world.push(tri);
+    }
+    let triangles = Mesh::generate_triangles(meshes, 1, 0);
+    for tri in triangles {
+        world.push(tri);
+    }
+    world.push(Primitive::new_xy_rect_transform(
+        -1f64,
+        -1f64,
+        1f64,
+        1f64,
+        0f64,
+        2,
+        Some(Arc::new(floor_transform)),
+    ));
+    let len = world.len();
+    let mut indices: Vec<usize> = (0usize..len).collect();
+    let bvh = BvhNode::new(&world, &mut indices, 0, len, 0., 1.);
+    objects.node = bvh;
+    let sampler =
+        Samplers::new_zero_two_sequence_sampler(GLOBAL_STATE.get_samples_per_pixel().into(), 0);
+    ("teapot_hdr.png".to_string(), camera, sampler)
+}
+
 fn smooth_plastic(texts: &mut Vec<Texture>, mats: &mut Vec<Material>) {
     let curr_len = texts.len();
     let purple = Vector3::new(0.1608, 0.0014767, 0.4);
@@ -747,6 +820,48 @@ fn smooth_plastic(texts: &mut Vec<Texture>, mats: &mut Vec<Material>) {
         0.002,
         false,
     ));
+}
+
+fn rosegold_metal(texts: &mut Vec<Texture>, mats: &mut Vec<Material>) {
+    let curr_len = texts.len();
+    let rosegold = Vector3::new(1f64 - 0.718, 1f64 - 0.431, 1f64 - 0.475);
+    let spec_color = util::white();
+    texts.push(Texture::new_solid_color(rosegold));
+    texts.push(Texture::new_solid_color(spec_color));
+    texts.push(Texture::new_solid_color(Vector3::new(0.002, 0f64, 0f64)));
+    mats.push(Material::make_metal(
+        curr_len,
+        curr_len + 1,
+        curr_len + 2,
+        curr_len + 2,
+        curr_len + 2,
+        0,
+        true
+    ));
+}
+
+fn glass(texts: &mut Vec<Texture>, mats: &mut Vec<Material>) {
+    let curr_len = texts.len();
+    let rosegold = Vector3::new(1f64 - 0.718, 1f64 - 0.431, 1f64 - 0.475);
+    let spec_color = util::white();
+    texts.push(Texture::new_solid_color(rosegold));
+    texts.push(Texture::new_solid_color(spec_color));
+    texts.push(Texture::new_solid_color(Vector3::new(0.002, 0f64, 0f64)));
+    mats.push(Material::make_glass(
+        curr_len + 1,
+        curr_len + 1,
+        0.01,
+        0.01,
+        1.5,
+        0,
+        true
+    ));
+}
+
+fn mirror(texts: &mut Vec<Texture>, mats: &mut Vec<Material>) {
+    let curr_len = texts.len();
+    texts.push(Texture::new_solid_color(Vector3::new(1f64,1f64,1f64)));
+    mats.push(Material::make_mirror(curr_len, 0));
 }
 
 fn disney_mat(texts: &mut Vec<Texture>, mats: &mut Vec<Material>) {
