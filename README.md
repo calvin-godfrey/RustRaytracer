@@ -8,8 +8,8 @@ Features:
 
 ## Examples
 
+![](examples/material_test.png)
 ![](examples/cornell_statue_metal.png)
-![](examples/plastic_dragon_normal.png)
 ![](examples/smooth_dragon.png)
 
 Todo list:
