@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+
+	Automatically converted from Wavefront OBJ
+
+-->
+
+<scene version="0.5.0">
+	<integrator id="integrator" type="direct"/>
+
+	<sensor id="Camera-camera" type="thinlens">
+		<float name="fov" value="40.4079"/>
+		<float name="nearClip" value="0.1"/>
+		<float name="farClip" value="100"/>
+		<string name="fovAxis" value="smaller"/>
+
+		<float name="apertureRadius" value="0.126"/>
+		<float name="focusDistance" value="8.7"/>
+	
+		<transform name="to_world"> <!-- TODO -->
+			<translate x="-0.911783" y="-0.254313" z="10.051501"/>
+		</transform>
+
+		<sampler id="Camera-camera_sampler" type="ldsampler">
+			<integer name="sampleCount" value="4"/>
+		</sampler>
+
+		<film id="Camera-camera_film" type="hdrfilm">
+			<integer name="width" value="768"/>
+			<integer name="height" value="431"/>
+			<rfilter type="gaussian"/>
+		</film>
+	</sensor>
+
+	<bsdf id="DiffuseBlack" type="diffuse">
+		<rgb name="reflectance" value="0.01, 0.01, 0.01"/>
+	</bsdf>
+
+	<bsdf id="Material.002_material" type="diffuse">
+		<rgb name="reflectance" value="0.603827 0 0.000504954"/>
+	</bsdf>
+
+	<bsdf id="PlasticWhite" type="plastic">
+		<rgb name="diffuseReflectance" value="0.603827 0.603827 0.603827"/>
+		<!-- <float alpha="0"/> -->
+	</bsdf>
+
+	<shape id="scene_mesh" type="obj">
+		<string name="filename" value="shape_mesh.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_0_mesh" type="obj">
+		<string name="filename" value="shape_0.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_1_mesh" type="obj">
+		<string name="filename" value="shape_1.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_2_mesh" type="obj">
+		<string name="filename" value="shape_2.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_3_mesh" type="obj">
+		<string name="filename" value="shape_3.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_4_mesh" type="obj">
+		<string name="filename" value="shape_4.obj"/>
+				<ref name="bsdf" id="DiffuseBlack"/>
+	</shape>
+
+	<shape id="scene_5_mesh" type="obj">
+		<string name="filename" value="shape_5.obj"/>
+				<ref name="bsdf" id="Material.002_material"/>
+	</shape>
+
+	<shape id="scene_6_mesh" type="obj">
+		<string name="filename" value="shape_6.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_7_mesh" type="obj">
+		<string name="filename" value="shape_7.obj"/>
+				<ref name="bsdf" id="DiffuseBlack"/>
+	</shape>
+
+	<shape id="scene_8_mesh" type="obj">
+		<string name="filename" value="shape_8.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_9_mesh" type="obj">
+		<string name="filename" value="shape_9.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_10_mesh" type="obj">
+		<string name="filename" value="shape_10.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_11_mesh" type="obj">
+		<string name="filename" value="shape_11.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_12_mesh" type="obj">
+		<string name="filename" value="shape_12.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_13_mesh" type="obj">
+		<string name="filename" value="shape_13.obj"/>
+				<ref name="bsdf" id="DiffuseBlack"/>
+	</shape>
+
+	<shape id="scene_14_mesh" type="obj">
+		<string name="filename" value="shape_14.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_15_mesh" type="obj">
+		<string name="filename" value="shape_15.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_16_mesh" type="obj">
+		<string name="filename" value="shape_16.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_17_mesh" type="obj">
+		<string name="filename" value="shape_17.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_18_mesh" type="obj">
+		<string name="filename" value="shape_18.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_19_mesh" type="obj">
+		<string name="filename" value="shape_19.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_20_mesh" type="obj">
+		<string name="filename" value="shape_20.obj"/>
+				<ref name="bsdf" id="DiffuseBlack"/>
+	</shape>
+
+	<shape id="scene_21_mesh" type="obj">
+		<string name="filename" value="shape_21.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_22_mesh" type="obj">
+		<string name="filename" value="shape_22.obj"/>
+				<ref name="bsdf" id="DiffuseBlack"/>
+	</shape>
+
+	<shape id="scene_23_mesh" type="obj">
+		<string name="filename" value="shape_23.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_24_mesh" type="obj">
+		<string name="filename" value="shape_24.obj"/>
+				<ref name="bsdf" id="DiffuseBlack"/>
+	</shape>
+
+	<shape id="scene_25_mesh" type="obj">
+		<string name="filename" value="shape_25.obj"/>
+				<ref name="bsdf" id="DiffuseBlack"/>
+	</shape>
+
+	<shape id="scene_26_mesh" type="obj">
+		<string name="filename" value="shape_26.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_27_mesh" type="obj">
+		<string name="filename" value="shape_27.obj"/>
+				
+		<emitter type="area">
+			<rgb name="radiance" value="0.09, 1.5, 2.4"/>
+		</emitter>
+	</shape>
+
+	<shape id="scene_28_mesh" type="obj">
+		<string name="filename" value="shape_28.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_29_mesh" type="obj">
+		<string name="filename" value="shape_29.obj"/>
+				<ref name="bsdf" id="PlasticWhite"/>
+	</shape>
+
+	<shape id="scene_30_mesh" type="obj">
+		<string name="filename" value="shape_30.obj"/>
+				<ref name="bsdf" id="DiffuseBlack"/>
+	</shape>
+
+	<shape id="scene_31_mesh" type="obj">
+		<string name="filename" value="shape_31.obj"/>
+				<ref name="bsdf" id="DiffuseBlack"/>
+	</shape>
+
+	<shape id="scene_32_mesh" type="obj">
+		<string name="filename" value="shape_32.obj"/>
+				<ref name="bsdf" id="DiffuseBlack"/>
+	</shape>
+
+	<shape id="scene_33_mesh" type="obj">
+		<string name="filename" value="shape_33.obj"/>
+				<ref name="bsdf" id="DiffuseBlack"/>
+	</shape>
+
+	<shape id="scene_34_mesh" type="obj">
+		<string name="filename" value="shape_34.obj"/>
+				<ref name="bsdf" id="DiffuseBlack"/>
+	</shape>
+
+	<shape id="scene_35_mesh" type="obj">
+		<string name="filename" value="shape_35.obj"/>
+				<ref name="bsdf" id="DiffuseBlack"/>
+	</shape>
+
+	<shape id="scene_36_mesh" type="obj">
+		<string name="filename" value="shape_36.obj"/>
+				<ref name="bsdf" id="DiffuseBlack"/>
+	</shape>
+
+	<shape id="scene_37_mesh" type="obj">
+		<string name="filename" value="shape_37.obj"/>
+				<ref name="bsdf" id="DiffuseBlack"/>
+	</shape>
+
+	<shape id="scene_38_mesh" type="obj">
+		<string name="filename" value="shape_38.obj"/>
+				<ref name="bsdf" id="DiffuseBlack"/>
+	</shape>
+
+	<shape id="scene_39_mesh" type="obj">
+		<string name="filename" value="shape_39.obj"/>
+				<ref name="bsdf" id="DiffuseBlack"/>
+	</shape>
+
+</scene>
